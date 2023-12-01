@@ -1,2 +1,2 @@
 # Spatial-Acoustic-Representation-Learning
-A python implementation of “Self-Supervised Spatial Acoustic Representation Learning with Multi-Channel Audio Conformer”
+A python implementation of “Self-Supervised Learning of Spatial Acoustic Representation with Cross-Channel Signal Reconstruction and Multi-Channel Conformer”
