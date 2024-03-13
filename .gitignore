@@ -6,4 +6,9 @@ code/data_read.py
 exp
 data
 *.pyc
+
 code/data*
+code/read*
+code/common
+.gitignore
+
