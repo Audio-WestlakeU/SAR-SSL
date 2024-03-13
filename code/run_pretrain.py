@@ -89,7 +89,6 @@ layer_keys = ['spec_encoder', 'spat_encoder', 'decoder', 'mlp_head','spec_encode
 nparam, nparam_sum = get_nparams(net, param_key_list=layer_keys)
 print('# Parameters (M):', round(nparam_sum, 2), [key+': '+str(round(nparam[key], 2)) for key in nparam.keys()])
 
-print('!!!!!!!', args.workers)
 # Pre-Train
 if (args.pretrain):
 	
@@ -338,7 +337,7 @@ if (args.pretrain_frozen_encoder):
 
 # Test
 if (args.test):
-	######## Setting ########
+	#########################
 	# test_mode = 'all'
 	test_mode = 'ins'
 	######################### 

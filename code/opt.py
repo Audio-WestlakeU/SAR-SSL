@@ -15,7 +15,9 @@ class opt_pretrain():
         self.sig_ver = ''
         self.rir_ver = ''
         self.noise_flag = ''
+        ##########################################
         self.time_ver = '0821'
+        ##########################################
         
         # Noise setting: w/ noise or w/o noise
         # self.wnoise = False
@@ -52,7 +54,7 @@ class opt_pretrain():
         # for training and test stages
         parser.add_argument('--gpu-id', type=str, default='7', metavar='GPU', help='GPU ID (default: 7)')
         parser.add_argument('--workers', type=int, default=8, metavar='Worker', help='number of workers (default: 8)')
-        parser.add_argument('--bs', type=int, nargs='+', default=[128, 128, 128], metavar='TrainValTestBatch', help='batch size for training, validation and test (default: 128, 128, 128)')
+        parser.add_argument('--bs', type=int, nargs='+', default=[128, 128, 128], metavar='TrainValTestBatch', help='batch size for training, validation and test (default: [128, 128, 128])')
         parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training (default: False)')
         parser.add_argument('--use-amp', action='store_true', default=False, help='Use automatic mixed precision training (default: False)')
         parser.add_argument('--seed', type=int, default=1, metavar='Seed', help='random seed (default: 1)')
@@ -120,7 +122,7 @@ class opt_pretrain():
         dirs['DCASE'] = dirs['data'] + '/RIR/DCASE/TAU-SRIR_DB'
         dirs['MIR'] = dirs['data'] + '/RIR/MIRDB/Impulse_response_Acoustic_Lab_Bar-Ilan_University'
         dirs['Mesh'] = dirs['data'] + '/RIR/Mesh'
-        dirs['BUTReverb'] = dirs['data'] + '/RIR/BUT_ReverbDB/RIRs'
+        dirs['BUTReverb'] = dirs['data'] + '/RIR/BUTReverb/RIRs'
         dirs['IRArni'] = dirs['data'] + '/RIR/IR_Arni/IR'
         dirs['dEchorate'] = dirs['data'] + '/RIR/dEchorate'
         dirs['ACE'] = dirs['data'] + '/RIR/ACE'
@@ -190,7 +192,9 @@ class opt_downstream():
         self.sig_ver = ''
         self.rir_ver = ''
         self.noise_flag = ''
+        ##########################################
         self.time_ver = '0821'
+        ##########################################
         
         # Noise setting: w/ noise or w/o noise
         self.wnoise = True
@@ -220,26 +224,19 @@ class opt_downstream():
         # Downstream: simulated or real-world
         ##########################################
         downstream_sim = True
+        # downstream_sim = False
         ##########################################
         if downstream_sim:
-            ds_task = ['TDOA', 'DRR', 'T60', 'C50', 'ABS']
+            ds_task = ['']
             ds_data = 'sim'
             self.train_test_model = 'sim_' + self.time_ver 
             real_sim_ratio = [0, 1]
         else:
-            ds_task = ['TDOA']
-            # ds_task = ['DRR', 'T60', 'C50', 'ABS']
-            if ('TDOA' in ds_task) & (len(ds_task)==1):
-                ds_data = 'real_locata'
-            else:
-                ds_data = 'real_ace'
-                # ds_data = 'real_dechorate'
-                # ds_data = 'real_butreverb'
-            #####################################
+            ds_task = ['']
+            ds_data = 'real'
             # real_sim_ratio = [1, 0] # real
             real_sim_ratio = [1, 1] # real + sim
             # real_sim_ratio = [0, 1] # sim
-            #####################################
             self.train_test_model = 'real_' + self.time_ver + '_train' + str(real_sim_ratio[0]) + 'real'+ str(real_sim_ratio[1]) + 'sim_valreal' 
             # self.train_test_model = 'real_' + self.time_ver + '_train0real1sim_valsim'  # only sim 
 
@@ -256,7 +253,7 @@ class opt_downstream():
         # for training and test stages
         parser.add_argument('--gpu-id', type=str, default='7', metavar='GPU', help='GPU ID (default: 7)')
         parser.add_argument('--workers', type=int, default=8, metavar='Worker', help='number of workers (default: 8)')
-        parser.add_argument('--bs', type=int, nargs='+', default=[128, 128, 128], metavar='TrainValTestBatch', help='batch size for training, validation and test (default: 128, 128, 128)')
+        # parser.add_argument('--bs', type=int, nargs='+', default=[128, 128, 128], metavar='TrainValTestBatch', help='batch size for training, validation and test (default: [128, 128, 128])')
         parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training (default: False)')
         parser.add_argument('--use-amp', action='store_true', default=False, help='Use automatic mixed precision training (default: False)')
         parser.add_argument('--seed', type=int, default=1, metavar='Seed', help='random seed (default: 1)')
@@ -276,6 +273,7 @@ class opt_downstream():
         parser.add_argument('--ds-head', type=str, default='mlp', metavar='DSHead', help='downstream head (default: mlp)') # ['mlp', 'crnn_in', 'crnn_med', 'crnn_out']
         parser.add_argument('--ds-embed', type=str, default='spat', metavar='DSEmbed', help='downstream embed (default: spat)') # ['spec_spat', 'spec', 'spat']
         parser.add_argument('--ds-nsimroom', type=int, default=0, metavar='DSSimRoom', help='number of simulated room used for downstream training (default: 0)') 
+        parser.add_argument('--ds-real-sim-ratio', type=int, nargs='+', default=[1, 1], metavar='DSRealSimRatio', help='downstream number ratio between real data and simulated data (default: [1, 1])')
 
         parser.add_argument('--ds-test', action='store_true', default=False, help='change to test stage of downstream tasks (default: False)')
 
@@ -292,6 +290,17 @@ class opt_downstream():
         args.noise_setting = self.noise_setting
         args.array_setting = self.array_setting
         args.acoustic_setting = self.acoustic_setting
+        
+        self.ds_specifics['task'] = args.ds_task
+        if 'real' in self.ds_specifics['data']:
+            if ('TDOA' in args.ds_task) & (len(args.ds_task)==1):
+                ds_data = 'real_locata'
+            else:
+                ds_data = 'real_ace'
+                # ds_data = 'real_dechorate'
+                # ds_data = 'real_butreverb'
+            self.ds_specifics['data'] = ds_data
+            self.ds_specifics['real_sim_ratio'] = args.ds_real_sim_ratio
         args.ds_specifics = self.ds_specifics
 
         self.rir_ver = ''
@@ -303,7 +312,7 @@ class opt_downstream():
         if (args.ds_trainmode == 'scratchUP'):
             bs_set = [32] 
             nepoch = 200
-            num = 5120*100
+            num = 512000
             ntrial = 1 
             args.ds_setting = {}
             args.ds_setting['TDOA'] = {'nepoch': nepoch, 'num': num, 'lr_set': [0.0001], 'bs_set': bs_set, 'ntrial': ntrial}
@@ -311,10 +320,7 @@ class opt_downstream():
             args.ds_setting['C50'] = {'nepoch': nepoch, 'num': num, 'lr_set': [0.001], 'bs_set': bs_set, 'ntrial': ntrial}
             args.ds_setting['T60'] = {'nepoch': nepoch, 'num': num, 'lr_set': [0.001], 'bs_set': bs_set, 'ntrial': ntrial}
             args.ds_setting['ABS'] = {'nepoch': nepoch, 'num': num, 'lr_set': [0.001], 'bs_set': bs_set, 'ntrial': ntrial}
-            args.ds_setting['SUR'] = {'nepoch': nepoch, 'num': num, 'lr_set': [0.001], 'bs_set': bs_set, 'ntrial': ntrial}
-            args.ds_setting['VOL'] = {'nepoch': nepoch, 'num': num, 'lr_set': [0.001], 'bs_set': bs_set, 'ntrial': ntrial}
-            args.ds_setting['SNR'] = {'nepoch': nepoch, 'num': num, 'lr_set': [0.0001, 0.001], 'bs_set': bs_set, 'ntrial': ntrial}
-            args.ds_setting['TDOA-DRR-T60-C50-ABS'] = {'nepoch': nepoch, 'num': num, 'lr_set': [0.0001], 'bs_set': bs_set, 'ntrial': ntrial}
+
         else:
             ### use pretrained model for downstream tasks
             ## Simulate data
@@ -324,12 +330,37 @@ class opt_downstream():
                 nepoch = 200
                 num = args.ds_nsimroom * 100
                 ntrial = np.maximum(1, round(32/(args.ds_nsimroom+10e-4)))
+                args.ds_setting = {}
+                args.ds_setting['TDOA'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
+                args.ds_setting['DRR'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
+                args.ds_setting['C50'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
+                args.ds_setting['T60'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
+                args.ds_setting['ABS'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
+                
             else:
                 ## Real-world data
                 bs_set = [16] # real-world
                 lr_set = [0.001, 0.0001] # real-world 
                 nepoch = 200
-
+                num_TDOA = 80000
+                if (args.ds_trainmode == 'finetune'):
+                    if self.ds_specifics['real_sim_ratio'] == [1,0]:
+                        num = 1600
+                    elif self.ds_specifics['real_sim_ratio'] == [1,1]:
+                        num = 3200
+                    elif self.ds_specifics['real_sim_ratio'] == [0,1]:
+                        num = 32000
+                elif (args.ds_trainmode == 'scratchLOW'):
+                    if self.ds_specifics['real_sim_ratio'] == [1,0]:
+                        num = 1600
+                    elif self.ds_specifics['real_sim_ratio'] == [1,1]:
+                        num = 16000
+                    elif self.ds_specifics['real_sim_ratio'] == [0,1]:
+                        num = 32000
+                else:
+                    raise Exception('Undefined trainmode for the number of real-world training data')
+                ntrial = 1
+                    
                 # set to infinite training epochs for plotting training curves
                 # lr_set = [0.0001] # for TDOA estimation on real-world data 
                 # nepoch = 60 # TDOA 
@@ -337,16 +368,13 @@ class opt_downstream():
                 # nepoch = 50 # T60
                 # nepoch = 300 # DRR
 
-            args.ds_setting = {}
-            args.ds_setting['TDOA'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
-            args.ds_setting['DRR'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
-            args.ds_setting['C50'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
-            args.ds_setting['T60'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
-            args.ds_setting['ABS'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
-            args.ds_setting['SUR'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
-            args.ds_setting['VOL'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
-            args.ds_setting['SNR'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
-            args.ds_setting['DOA'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
+                args.ds_setting = {}
+                args.ds_setting['TDOA'] = {'nepoch': nepoch, 'num': num_TDOA, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
+                args.ds_setting['DRR'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
+                args.ds_setting['C50'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
+                args.ds_setting['T60'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
+                args.ds_setting['ABS'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
+
             if 'sim' in self.ds_specifics['data']:
                 self.extra_info = 'R'+str(args.ds_nsimroom)
 
@@ -380,11 +408,10 @@ class opt_downstream():
         # RIR (+ noise) & sensor signal
         dirs['simulate'] = dirs['gerdata'] + '/RIR-simulate' 
         dirs['DCASE'] = dirs['data'] + '/RIR/DCASE/TAU-SRIR_DB'
-        dirs['MIR'] = dirs['data'] + '/RIR/MIRDB/Impulse_response_Acoustic_Lab_Bar-Ilan_University'
         dirs['Mesh'] = dirs['data'] + '/RIR/Mesh'
-        dirs['BUTReverb'] = dirs['data'] + '/RIR/BUT_ReverbDB/RIRs'
-        dirs['IRArni'] = dirs['data'] + '/RIR/IR_Arni/IR'
+        dirs['MIR'] = dirs['data'] + '/RIR/MIRDB/Impulse_response_Acoustic_Lab_Bar-Ilan_University'
         dirs['dEchorate'] = dirs['data'] + '/RIR/dEchorate'
+        dirs['BUTReverb'] = dirs['data'] + '/RIR/BUT_ReverbDB/RIRs'
         dirs['ACE'] = dirs['data'] + '/RIR/ACE'
         dirs['LOCATA'] = dirs['data'] + '/SenSig/LOCATA'
 
@@ -399,9 +426,7 @@ class opt_downstream():
 
         if ('sim' in self.ds_specifics['data']):
             dirs_rir = dirs['gerdata'] + '/RIR' + self.rir_ver 
-            dirs['rir'] = [
-                dirs_rir + '/simulate' + self.time_ver,
-            ]
+            dirs['rir'] = [ dirs_rir + '/simulate' + self.time_ver,]
 
             # ScrtchUP
             dirs_pretrain = dirs['gerdata'] + '/SenSig-pretrain' + self.sig_ver
@@ -414,7 +439,7 @@ class opt_downstream():
             dirs['sensig_train'] = [dirs_train + '/simulate' + self.time_ver + 'R' + str(self.ds_nsimroom), ]
             dirs['sensig_val'] = [ dirs_val + '/simulate' + self.time_ver + 'R20', ]
             dirs['sensig_test'] = [ dirs_test + '/simulate' + self.time_ver +'R20', ]
-
+ 
         if ('real' in self.ds_specifics['data']):
 
             if ('locata' in self.ds_specifics['data']): 
@@ -423,7 +448,7 @@ class opt_downstream():
                 dirs['sensig_val'] += [ dirs_val.replace(self.noise_flag, '') + '/LOCATA', 
                                         dirs_val + '/simulate' + self.time_ver + 'R20', ] # add sim        
                 dirs['sensig_test'] += [ dirs_test.replace(self.noise_flag, '') + '/LOCATA',
-                                        dirs_test + '/simulate' + self.time_ver + 'R20', ]
+                                         dirs_test + '/simulate' + self.time_ver + 'R20', ]
                 dirs['rir'] = ['']
 
             if 'ace' in self.ds_specifics['data']:

@@ -923,12 +923,10 @@ class RIRDataset(Dataset):
         self.data_paths = []
         self.data_paths_prob_ratio = []
         self.prob_ratio_list = data_prob_ratio_list
-        print(data_dir_list)
 
         for data_dir_idx in range(len(data_dir_list)):
             
             data_dir = data_dir_list[data_dir_idx]
-            print(data_dir)
             
             data_paths = self.search_files(dir=data_dir, file_extension='npz')
             self.data_paths += data_paths
@@ -1233,7 +1231,7 @@ class RandomMicSigDataset_FromRIR(Dataset):
         acoustic_scene.trajectory = trajectory
 
         # acoustic_scene.source_vad = vad[:,0:num_source] # a mask
-        acoustic_scene.DOA = []
+        # acoustic_scene.DOA = []
         acoustic_scene.TDOA = []
         acoustic_scene.DRR = []
         acoustic_scene.C50 = []

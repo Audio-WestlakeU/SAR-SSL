@@ -35,7 +35,7 @@ import dataset as at_dataset
 import learner as at_learner
 import model as at_model
 from dataset import ArraySetup
-from common.utils import set_seed, set_random_seed, get_nparams, vis_TSNE, cross_validation_datadir,one_validation_datadir_simdata
+from common.utils import set_seed, set_random_seed, get_nparams, vis_TSNE, cross_validation_datadir, one_validation_datadir_simdata
 
 use_cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
@@ -51,7 +51,7 @@ speed = args.acoustic_setting['speed']
 fs = args.acoustic_setting['fs']
 ds_data = args.ds_specifics['data']
 real_sim_ratio = args.ds_specifics['real_sim_ratio']
-print(ds_data)
+print(args.ds_specifics)
 
 if (args.ds_task == ['TDOA']):
 	T = 1.04
@@ -249,8 +249,7 @@ if (args.ds_train):
 									else:
 										real_list = room_dir_set[trial_idx][stage.split('_')[0]]
 										data_dir_list = room_dir_set[trial_idx][stage.split('_')[0]]
-										prob_ratio_list = None 
-									print(stage)	 
+										prob_ratio_list = None  
 
 									rirDataset = at_dataset.RIRDataset(
 										data_dir_list = data_dir_list,
