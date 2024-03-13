@@ -336,7 +336,8 @@ class opt_downstream():
                 args.ds_setting['C50'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
                 args.ds_setting['T60'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
                 args.ds_setting['ABS'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
-                
+                self.extra_info = 'R'+str(args.ds_nsimroom)
+
             else:
                 ## Real-world data
                 bs_set = [16] # real-world
@@ -374,10 +375,6 @@ class opt_downstream():
                 args.ds_setting['C50'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
                 args.ds_setting['T60'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
                 args.ds_setting['ABS'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
-
-            if 'sim' in self.ds_specifics['data']:
-                self.extra_info = 'R'+str(args.ds_nsimroom)
-
         return args
 
     def dir(self):

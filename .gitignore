@@ -1,0 +1,9 @@
+code/ref
+code/ks
+code/*.sh
+code/loss.py
+code/data_read.py
+exp
+data
+*.pyc
+code/data*
