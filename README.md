@@ -207,6 +207,8 @@ A python implementation of “**<a href="https://arxiv.org/abs/2312.00476" targe
   - Read downstream results (MAEs of TDOA, DRR, T60, C50, SNR, ABS estimation) from saved mat files
   ```
   python read_dsmat_bslr.py --time [*]
+  python read_lossmetric_simdata.py
+  python read_lossmetric_realdata.py
   ```
 
 + **Trained models**

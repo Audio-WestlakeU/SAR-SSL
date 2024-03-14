@@ -98,12 +98,12 @@ class opt_pretrain():
         work_dir = self.work_dir
         dirs = {}
 
-        dirs['code'] = work_dir + '/Re-SSL/code'
+        dirs['code'] = work_dir + '/SAR-SSL/code'
         # dirs['data'] = work_dir + '/data'
-        # dirs['gerdata'] = work_dir + '/Re-SSL/data'
+        # dirs['gerdata'] = work_dir + '/SAR-SSL/data'
         dirs['data'] = self.work_dir_local + '/data'
-        dirs['gerdata'] = self.work_dir_local + '/Re-SSL/data'
-        dirs['exp'] = work_dir + '/Re-SSL/exp'
+        dirs['gerdata'] = self.work_dir_local + '/SAR-SSL/data'
+        dirs['exp'] = work_dir + '/SAR-SSL/exp'
 
         dirs['sousig_pretrain'] = dirs['data'] + '/SouSig/wsj0/tr'
         dirs['sousig_preval'] = dirs['data'] + '/SouSig/wsj0/dt'
@@ -383,12 +383,12 @@ class opt_downstream():
         work_dir = self.work_dir
         dirs = {}
 
-        dirs['code'] = work_dir + '/Re-SSL/code'
+        dirs['code'] = work_dir + '/SAR-SSL/code'
         # dirs['data'] = work_dir + '/data'
-        # dirs['gerdata'] = work_dir + '/Re-SSL/data'
+        # dirs['gerdata'] = work_dir + '/SAR-SSL/data'
         dirs['data'] = self.work_dir_local + '/data'
-        dirs['gerdata'] = self.work_dir_local + '/Re-SSL/data'
-        dirs['exp'] = work_dir + '/Re-SSL/exp'
+        dirs['gerdata'] = self.work_dir_local + '/SAR-SSL/data'
+        dirs['exp'] = work_dir + '/SAR-SSL/exp'
 
         dirs['sousig_pretrain'] = dirs['data'] + '/SouSig/wsj0/tr'
         dirs['sousig_preval'] = dirs['data'] + '/SouSig/wsj0/dt'
