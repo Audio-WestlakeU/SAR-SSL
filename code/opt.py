@@ -365,9 +365,11 @@ class opt_downstream():
                 # set to infinite training epochs for plotting training curves
                 # lr_set = [0.0001] # for TDOA estimation on real-world data 
                 # nepoch = 60 # TDOA 
+                # num_TDOA = 80000
                 # lr_set = [0.001,0.0001]
                 # nepoch = 50 # T60
                 # nepoch = 300 # DRR
+                # num = 1600
 
                 args.ds_setting = {}
                 args.ds_setting['TDOA'] = {'nepoch': nepoch, 'num': num_TDOA, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}

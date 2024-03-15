@@ -121,7 +121,8 @@ A python implementation of “**<a href="https://arxiv.org/abs/2312.00476" targe
 
 + **Training**
   
-  Sepcify the data time version (`self.time_ver`) and whether training with simulated data (`self.pretrain_sim`) in class `opt_pretrain` of `opt.py`
+  Sepcify the data time version (`self.time_ver`) and whether training with simulated data (`self.pretrain_sim`) in class `opt_pretrain` of `opt.py`. 
+  When using real-world data, first train on simulated data with a default cosine-decay learing rate (initialized with 0.001), and then finetune on real-world data with a learning rate 0.0001.
   
   ```
   python run_pretrain.py --pretrain --gpu-id [*]
