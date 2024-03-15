@@ -77,7 +77,7 @@ A python implementation of “**<a href="https://arxiv.org/abs/2312.00476" targe
           .-eval
     ```
 
-  - Install: numpy, scipy, soundfile, tqdm, matplotlib, <a href="https://github.com/DavidDiazGuerra/gpuRIR" target="_blank">gpuRIR</a>, <a href="https://github.com/wiseman/py-webrtcvad" target="_blank">webrtcvad</a>, etc.
+  - Install: numpy, scipy, soundfile, <a href="https://github.com/DavidDiazGuerra/gpuRIR" target="_blank">gpuRIR</a>, etc.
 
 + **Data generation**
   - Simulated data
