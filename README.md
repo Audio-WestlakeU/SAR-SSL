@@ -148,7 +148,12 @@ A python implementation of “**<a href="https://arxiv.org/abs/2312.00476" targe
     python data_generation_SimulatedRIR.py --gpu-id [*]
     ```
     2. generate microphone signals from RIRs
-    
+    ```
+    # room = 2, 4, 8, 16, 32, 64, 128 or 256, and room-trial-id = 16, 8, 4, 2, 1, 1, 1 or 1
+    python data_generation_SIGfromMeasuredRIR.py --data-id 6 --wnoise --stage train --room 8 --room-trial-id 0 
+    python data_generation_SIGfromMeasuredRIR.py --data-id 6 --wnoise --stage val --room 20 
+    python data_generation_SIGfromMeasuredRIR.py --data-id 6 --wnoise --stage test --room 20 
+    ```
     | Stage | Trials   | nRooms | nRIRs/Room | nSrcSig/RIR | nMicSig |
     |:----- |:-------- |:------ |:---------- |:----------- |:------- |
     | train | x16      | 2      | 50         | 2           | 200     |
@@ -161,13 +166,6 @@ A python implementation of “**<a href="https://arxiv.org/abs/2312.00476" targe
     |       | x1       | 256    | 50         | 2           | 25600   |
     | val   | -        | 20     | 50         | 1           | 1000    |
     | test  | -        | 20     | 50         | 4           | 4000    |
-
-    ```
-    # room = 2, 4, 8, 16, 32, 64, 128 or 256, and room-trial-id = 16, 8, 4, 2, 1, 1, 1 or 1
-    python data_generation_SIGfromMeasuredRIR.py --data-id 6 --wnoise --stage train --room 8 --room-trial-id 0 
-    python data_generation_SIGfromMeasuredRIR.py --data-id 6 --wnoise --stage val --room 20 
-    python data_generation_SIGfromMeasuredRIR.py --data-id 6 --wnoise --stage test --room 20 
-    ```
 
   - Real-world data
     - TDOA estimation
@@ -228,6 +226,12 @@ A python implementation of “**<a href="https://arxiv.org/abs/2312.00476" targe
 
 + **Trained models**
   - ensemble_model.tar
+
+### Others
+  If `OSError: [Errno 24] Too many open files` occurs, input the following at the command line
+  ```
+  ulimit -n 2048
+  ```
 
 ## Citation
 If you find our work useful in your research, please consider citing:
