@@ -162,24 +162,7 @@ if (args.data_op == 'save'):
     for idx in pbar:
         mic_signals, acoustic_scene = dataset[idx] # (nsamples, nmic)
         save_idx = start_idx+idx
-        # if args.ins: 
-        #     if args.save_orisrc == False:
-        #         acoustic_scene.source_signal = []
-        #         acoustic_scene.noise_signal = []
-        #         acoustic_scene.timestamps = []
-        #         acoustic_scene.t = []
-        #         acoustic_scene.trajectory = []
-        #     else:
-        #         src_noi_rir_path = save_dir + '/' + str(save_idx) + '_mic_src_noi_rir.mat'
-        #         src_signals = copy.deepcopy(acoustic_scene.source_signal) # (nsamples, nsrc)
-        #         noi_signals = copy.deepcopy(acoustic_scene.noise_signal) # (nsamples, nmic)
-        #         rir = copy.deepcopy(acoustic_scene.RIR[0]).transpose(2, 1, 0, 3) # (nsamples, nmic, npoints, nsrc)
-        #         scipy.io.savemat(src_noi_rir_path, {'micsig': mic_signals, 'srcsig': src_signals, 'noisig': noi_signals, 'rir': rir})
-        #     acous_path = save_dir + '/' + str(save_idx) + '.npz'
-        #     sig_path = save_dir + '/' + str(save_idx) + '.wav' 
-        #     save_file(mic_signals, acoustic_scene, sig_path, acous_path)
 
-        # else:
         if args.save_orisrc == False:
             acoustic_scene.source_signal = []
             acoustic_scene.noise_signal = []

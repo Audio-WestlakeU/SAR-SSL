@@ -60,7 +60,7 @@ class opt():
         dirs = {}
 
         dirs['data'] = work_dir + '/data'
-        dirs['gerdata'] = work_dir + '/Re-SSL/data'
+        dirs['gerdata'] = work_dir + '/SAR-SSL/data'
  
         dirs['sousig_pretrain'] = dirs['data'] + '/SouSig/wsj0/tr'
         dirs['sousig_preval'] = dirs['data'] + '/SouSig/wsj0/dt'

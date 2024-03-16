@@ -10,7 +10,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from common.utils_room_acoustics import rt60_from_rirs, dpRIR_from_RIR
 from dataset import Parameter, AcousticScene, ArraySetup
 
-dualch_array_setup = ArraySetup(arrayType='planar',
+dualch_array_setup = ArraySetup(arrayType='planar_linear',
     orV = np.array([0.0, 1.0, 0.0]), 
     mic_scale = Parameter(0.3, 2), 
     mic_rotate = Parameter(0, 360), 
@@ -161,7 +161,7 @@ class RandomMicSigDataset(Dataset):
         #     # src_pos = np.concatenate((src_pos_min[np.newaxis, :], src_pos_max[np.newaxis, :]), axis=0)
         #     # self.plotScene(room_sz=room_sz, pos_src=src_pos, pos_rcv=array_pos[np.newaxis, :], view='XY', save_path='./')
             
-        # if array_setup.arrayType == '3D': 
+        # elif array_setup.arrayType == '3D': 
         #     # suited cases: annotation is not symetric about end-fire direction (like DOA, not TDOA), front-back confusion not exists, all plane is set
         #     # src can be at some 3D point in the all-plane space
         #     direction_candidates = ['x', 'y', '-x', '-y']
@@ -179,6 +179,9 @@ class RandomMicSigDataset(Dataset):
         #     src_array_relative_height = 0.3
         #     src_pos_min[2] = array_pos[2] - src_array_relative_height
         #     src_pos_max[2] = array_pos[2] + src_array_relative_height
+        
+        else:
+            raise Exception('Undefined array type~')
 
         for i in range(3):
             assert src_pos_min[i]<=src_pos_max[i], 'Src postion range error: '+str(src_pos_min[i])+ '>' + str(src_pos_max[i])
@@ -251,28 +254,28 @@ class RandomMicSigDataset(Dataset):
         dist = np.sqrt(np.sum((pos_current - pos0)**2))
         return np.abs(dist - desired_dist)
     
-    def plot_room(self, room_sz, pos_src, pos_rcv, pos_noise=None, save_path=None):
+    # def plot_room(self, room_sz, pos_src, pos_rcv, pos_noise=None, save_path=None):
         
-        plt.close('all')
-        fig = plt.figure(figsize=(10, 8))
-        ax = Axes3D(fig)
-        fig.add_axes(ax)
-        ax.scatter(pos_rcv[:, 0], pos_rcv[:, 1], pos_rcv[:, 2])
-        if len(pos_rcv) > 2:
-            # draw the first half mics with different color for checking the rotation
-            ax.scatter(pos_rcv[:len(pos_rcv) // 2, 0], pos_rcv[:len(pos_rcv) // 2, 1], pos_rcv[:len(pos_rcv) // 2, 2], c='r', s=1)
-        ax.scatter(pos_src[:, 0], pos_src[:, 1], pos_src[:, 2], s=5, c='orange')
-        if pos_noise is not None and len(pos_noise) > 0:
-            ax.scatter(pos_noise[:, 0], pos_noise[:, 1], pos_noise[:, 2], s=30, c='green')
+    #     plt.close('all')
+    #     fig = plt.figure(figsize=(10, 8))
+    #     ax = Axes3D(fig)
+    #     fig.add_axes(ax)
+    #     ax.scatter(pos_rcv[:, 0], pos_rcv[:, 1], pos_rcv[:, 2])
+    #     if len(pos_rcv) > 2:
+    #         # draw the first half mics with different color for checking the rotation
+    #         ax.scatter(pos_rcv[:len(pos_rcv) // 2, 0], pos_rcv[:len(pos_rcv) // 2, 1], pos_rcv[:len(pos_rcv) // 2, 2], c='r', s=1)
+    #     ax.scatter(pos_src[:, 0], pos_src[:, 1], pos_src[:, 2], s=5, c='orange')
+    #     if pos_noise is not None and len(pos_noise) > 0:
+    #         ax.scatter(pos_noise[:, 0], pos_noise[:, 1], pos_noise[:, 2], s=30, c='green')
 
-        ax.set(xlabel="X", ylabel="Y", zlabel="Z")
-        ax.set_xlim3d([0, room_sz[0]])
-        ax.set_ylim3d([0, room_sz[1]])
-        ax.set_zlim3d([0, room_sz[2]])
-        # plt.show()
-        if save_path is not None:
-            plt.savefig(save_path + 'room')
-        plt.close()
+    #     ax.set(xlabel="X", ylabel="Y", zlabel="Z")
+    #     ax.set_xlim3d([0, room_sz[0]])
+    #     ax.set_ylim3d([0, room_sz[1]])
+    #     ax.set_zlim3d([0, room_sz[2]])
+    #     # plt.show()
+    #     if save_path is not None:
+    #         plt.savefig(save_path + 'room')
+    #     plt.close()
 
     def plotScene(self, room_sz, pos_src, pos_rcv, view='3D', save_path=None):
         """ Plots the source trajectory and the microphones within the room
@@ -682,6 +685,9 @@ class RandomMicSigDatasetOri(Dataset):
         #     src_array_relative_height = 0.3
         #     src_pos_min[2] = array_pos[2] - src_array_relative_height
         #     src_pos_max[2] = array_pos[2] + src_array_relative_height
+                
+        else:
+            raise Exception('Undefined array type~')
 
         for i in range(3):
             assert src_pos_min[i]<=src_pos_max[i], 'Src postion range error: '+str(src_pos_min[i])+ '>' + str(src_pos_max[i])
@@ -757,28 +763,28 @@ class RandomMicSigDatasetOri(Dataset):
         dist = np.sqrt(np.sum((pos_current - pos0)**2))
         return np.abs(dist - desired_dist)
     
-    def plot_room(self, room_sz, pos_src, pos_rcv, pos_noise=None, save_path=None):
+    # def plot_room(self, room_sz, pos_src, pos_rcv, pos_noise=None, save_path=None):
 
-        plt.close('all')
-        fig = plt.figure(figsize=(10, 8))
-        ax = Axes3D(fig)
-        fig.add_axes(ax)
-        ax.scatter(pos_rcv[:, 0], pos_rcv[:, 1], pos_rcv[:, 2])
-        if len(pos_rcv) > 2:
-            # draw the first half mics with different color for checking the rotation
-            ax.scatter(pos_rcv[:len(pos_rcv) // 2, 0], pos_rcv[:len(pos_rcv) // 2, 1], pos_rcv[:len(pos_rcv) // 2, 2], c='r', s=1)
-        ax.scatter(pos_src[:, 0], pos_src[:, 1], pos_src[:, 2], s=5, c='orange')
-        if pos_noise is not None and len(pos_noise) > 0:
-            ax.scatter(pos_noise[:, 0], pos_noise[:, 1], pos_noise[:, 2], s=30, c='green')
+    #     plt.close('all')
+    #     fig = plt.figure(figsize=(10, 8))
+    #     ax = Axes3D(fig)
+    #     fig.add_axes(ax)
+    #     ax.scatter(pos_rcv[:, 0], pos_rcv[:, 1], pos_rcv[:, 2])
+    #     if len(pos_rcv) > 2:
+    #         # draw the first half mics with different color for checking the rotation
+    #         ax.scatter(pos_rcv[:len(pos_rcv) // 2, 0], pos_rcv[:len(pos_rcv) // 2, 1], pos_rcv[:len(pos_rcv) // 2, 2], c='r', s=1)
+    #     ax.scatter(pos_src[:, 0], pos_src[:, 1], pos_src[:, 2], s=5, c='orange')
+    #     if pos_noise is not None and len(pos_noise) > 0:
+    #         ax.scatter(pos_noise[:, 0], pos_noise[:, 1], pos_noise[:, 2], s=30, c='green')
 
-        ax.set(xlabel="X", ylabel="Y", zlabel="Z")
-        ax.set_xlim3d([0, room_sz[0]])
-        ax.set_ylim3d([0, room_sz[1]])
-        ax.set_zlim3d([0, room_sz[2]])
-        # plt.show()
-        if save_path is not None:
-            plt.savefig(save_path + 'room') 
-        plt.close()
+    #     ax.set(xlabel="X", ylabel="Y", zlabel="Z")
+    #     ax.set_xlim3d([0, room_sz[0]])
+    #     ax.set_ylim3d([0, room_sz[1]])
+    #     ax.set_zlim3d([0, room_sz[2]])
+    #     # plt.show()
+    #     if save_path is not None:
+    #         plt.savefig(save_path + 'room') 
+    #     plt.close()
 
     def plotScene(self, room_sz, pos_src, pos_rcv, view='3D', save_path=None):
         """ Plots the source trajectory and the microphones within the room
