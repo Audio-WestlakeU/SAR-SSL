@@ -1,6 +1,8 @@
 # SAR-SSL
 A python implementation of “**<a href="https://arxiv.org/abs/2312.00476" target="_blank">Self-Supervised Learning of Spatial Acoustic Representation with Cross-Channel Signal Reconstruction and Multi-Channel Conformer</a>**”
-
+    <div align=center>
+    <img src=https://github.com/BingYang-20/SAR-SSL/assets/74909427/49878fbd-415c-45a7-8ff2-2b99ec4bf496 width=40% />
+    </div>
 + **Contributions**
   - **Self-supervised learning of spatial acoustic representation (SSL-SAR)** 
     - first self-supervised learning method in spatial acoustic representation learning and multi-channel audio signal processing
