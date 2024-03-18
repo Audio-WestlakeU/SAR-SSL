@@ -130,10 +130,10 @@ class opt():
             dirs_val + '/LOCATA'
             ]
         dirs['sensig_test'] = [ 
+            dirs_test + '/simulate',
             dirs_test + '/DCASE',           
             dirs_test + '/MIR',
             dirs_test + '/Mesh',
-            dirs_test + '/simulate', 
             dirs_test + '/BUTReverb', 
             dirs_test + '/ACE', 
             dirs_test + '/dEchorate',
@@ -154,7 +154,6 @@ class opt():
             dirs_rir + '/DCASE_noise',
             dirs_rir + '/Mesh',
             dirs_rir + '/MIR',
-            dirs_rir + '/simulate',
         ]
 
         return dirs

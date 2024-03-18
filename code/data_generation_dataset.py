@@ -15,9 +15,9 @@ dualch_array_setup = ArraySetup(arrayType='planar_linear',
     mic_scale = Parameter(0.3, 2), 
     mic_rotate = Parameter(0, 360), 
     mic_pos = np.array(((-0.05, 0.0, 0.0),
-    (0.05, 0.0, 0.0))), 
+                        (0.05, 0.0, 0.0))), 
     mic_orV = np.array(((-1.0, 0.0, 0.0),
-    (1.0, 0.0, 0.0))), 
+                        (1.0, 0.0, 0.0))), 
     mic_pattern = 'omni'
 )
 
@@ -131,7 +131,7 @@ class RandomMicSigDataset(Dataset):
         src_pos_min = np.array([0.0, 0.0, 0.0]) + np.array([min_src_boundary_dist, min_src_boundary_dist, min_src_boundary_dist])
         src_pos_max = room_sz - np.array([min_src_boundary_dist, min_src_boundary_dist, min_src_boundary_dist])
         if array_setup.arrayType == 'planar_linear':   
-            # suited cases: annotation is symetric about end-fire direction (like TDOA, not DOA)
+            # suited cases: annotation is symetric about end-fire direction (like TDOA, not DOA), front-back confusion not exists, half-plane is set
             # src can be at any 3D point in half-plane space
             if np.sum(array_setup.orV) > 0:
                 src_pos_min[np.nonzero(array_setup.orV)] = array_pos[np.nonzero(array_setup.orV)] 
@@ -140,9 +140,23 @@ class RandomMicSigDataset(Dataset):
                 src_pos_max[np.nonzero(array_setup.orV)] = array_pos[np.nonzero(array_setup.orV)] 
                 src_pos_max -= min_src_array_dist * np.abs(array_setup.orV)
 
-        # elif array_setup.arrayType == 'planar': 
-        #     # suited cases: annotation is not symetric about end-fire direction (like DOA, not TDOA), front-back confusion exists, only half plane is set
+        # if array_setup.arrayType == 'planar_linear':   
+        #     # suited cases: annotation is symetric about end-fire direction (like DOA, not TDOA), front-back confusion exists, half-plane is set
+        #     # src can be at any planar point in half-plane space
+        #     assert (array_setup.orV==[0,1,0]) | (array_setup.orV==[0,-1,0]) | (array_setup.orV==[1,0,0]) | (array_setup.orV==[-1,0,0]), 'array orientation must along x or y axis'
+        #     if array_setup.orV[0] == 1:
+        #         src_pos_min[0] = array_pos[0] + min_src_array_dist 
+        #     elif array_setup.orV[0] == -1:
+        #         src_pos_max[0] = array_pos[0] - min_src_array_dist 
+        #     elif array_setup.orV[1] == 1:
+        #         src_pos_min[1] = array_pos[1] + min_src_array_dist 
+        #     elif array_setup.orV[1] == -1:
+        #         src_pos_max[1] = array_pos[1] - min_src_array_dist 
+
+        # if array_setup.arrayType == 'planar': 
+        #     # suited cases: annotation is not symetric about end-fire direction (like DOA), front-back confusion not exists, all plane is set
         #     # src can be at any planar point in the all-plane space
+        #     assert array_setup.mic_rotate == 0, 'array rotate must be 0'
         #     direction_candidates = ['x', 'y', '-x', '-y']
         #     direction = random.sample(direction_candidates, 1)[0]
         #     if direction == 'x':
@@ -157,13 +171,13 @@ class RandomMicSigDataset(Dataset):
         #         raise Exception('Unrecognized direction~')
         #     src_pos_min[2] = array_pos[2] - 0.0
         #     src_pos_max[2] = array_pos[2] + 0.0
-        #     # self.plot_room(room_sz=room_sz, pos_src=src_pos_min[np.newaxis, :], pos_rcv=array_pos[np.newaxis, :], pos_noise=src_pos_max[np.newaxis, :], save_path='/data/home/yangbing/Re-SSL/exp/')
         #     # src_pos = np.concatenate((src_pos_min[np.newaxis, :], src_pos_max[np.newaxis, :]), axis=0)
-        #     # self.plotScene(room_sz=room_sz, pos_src=src_pos, pos_rcv=array_pos[np.newaxis, :], view='XY', save_path='./')
+        #     # self.plotScene(room_sz=room_sz, traj_pts=src_pos, mic_pos=array_setup.mic_pos, view='XY', save_path='./')
             
-        # elif array_setup.arrayType == '3D': 
-        #     # suited cases: annotation is not symetric about end-fire direction (like DOA, not TDOA), front-back confusion not exists, all plane is set
+        # if array_setup.arrayType == '3D': 
+        #     # suited cases: annotation is not symetric about end-fire direction (like DOA), front-back confusion not exists, all plane is set
         #     # src can be at some 3D point in the all-plane space
+        #     assert array_setup.rotate == 0, 'array rotate must be 0'
         #     direction_candidates = ['x', 'y', '-x', '-y']
         #     direction = random.sample(direction_candidates, 1)[0]
         #     if direction == 'x':
@@ -241,6 +255,8 @@ class RandomMicSigDataset(Dataset):
                 # if np.random.random(1) < 0.25:
                 #     traj_pts[:,:,source_idx] = np.ones((self.nb_points,1)) * src_pos_ini
                 # traj_pts[:,2,source_idx] = array_pos[2] # if sources and array are in the same horizontal plane
+                    
+            # self.plotScene(room_sz=room_sz, traj_pts=traj_pts , mic_pos=array_setup.mic_pos, view='XY', save_path='./')
 
         if traj_pt_mode != 'distance_sin':
             return traj_pts 
@@ -277,24 +293,27 @@ class RandomMicSigDataset(Dataset):
     #         plt.savefig(save_path + 'room')
     #     plt.close()
 
-    def plotScene(self, room_sz, pos_src, pos_rcv, view='3D', save_path=None):
+    def plotScene(self, room_sz, traj_pts, mic_pos, view='3D', save_path=None):
         """ Plots the source trajectory and the microphones within the room
+            Args:   traj_pts - (npoints, 3, nsrc)
+                    mic_pos  - (nmic, 3)
         """
         assert view in ['3D', 'XYZ', 'XY', 'XZ', 'YZ']
-        traj_pts = pos_src
-        mic_pos = pos_rcv 
         fig = plt.figure()
+        nsrc = traj_pts.shape[-1]
 
         if view == '3D' or view == 'XYZ':
             ax = Axes3D(fig)
             ax.set_xlim3d(0, room_sz[0])
             ax.set_ylim3d(0, room_sz[1])
             ax.set_zlim3d(0, room_sz[2])
-
-            ax.scatter(traj_pts[:,0], traj_pts[:,1], traj_pts[:,2])
             ax.scatter(mic_pos[:,0], mic_pos[:,1], mic_pos[:,2])
-            ax.text(traj_pts[0,0], traj_pts[0,1], traj_pts[0,2], 'start')
-
+            legends = ['Microphone array']
+            for src_idx in range(nsrc):
+                ax.scatter(traj_pts[:,0,src_idx], traj_pts[:,1,src_idx], traj_pts[:,2,src_idx])
+                ax.text(traj_pts[0,0,src_idx], traj_pts[0,1,src_idx], traj_pts[0,2,src_idx], 'start')
+                legends += ['Source trajectory ' + str(src_idx)]
+            ax.legend(legends)
             # ax.set_title('$T_{60}$' + ' = {:.3f}s, SNR = {:.1f}dB'.format(self.T60, self.SNR))
             ax.set_xlabel('x [m]')
             ax.set_ylabel('y [m]')
@@ -307,33 +326,42 @@ class RandomMicSigDataset(Dataset):
             if view == 'XY':
                 ax.set_xlim(0, room_sz[0])
                 ax.set_ylim(0, room_sz[1])
-                ax.scatter(traj_pts[:,0], traj_pts[:,1])
                 ax.scatter(mic_pos[:,0], mic_pos[:,1])
-                ax.text(traj_pts[0,0], traj_pts[0,1], 'start')
-                ax.legend(['Source trajectory', 'Microphone array'])
+                legends = ['Microphone array']
+                for src_idx in range(nsrc):
+                    ax.scatter(traj_pts[:,0,src_idx], traj_pts[:,1,src_idx])
+                    ax.text(traj_pts[0,0,src_idx], traj_pts[0,1,src_idx], 'start')
+                    legends += ['Source trajectory ' + str(src_idx)]
+                ax.legend(legends)
                 ax.set_xlabel('x [m]')
                 ax.set_ylabel('y [m]')
             elif view == 'XZ':
                 ax.set_xlim(0, room_sz[0])
                 ax.set_ylim(0, room_sz[2])
-                ax.scatter(traj_pts[:,0], traj_pts[:,2])
                 ax.scatter(mic_pos[:,0], mic_pos[:,2])
-                ax.text(traj_pts[0,0], traj_pts[0,2], 'start')
-                ax.legend(['Source trajectory', 'Microphone array'])
+                legends = ['Microphone array']
+                for src_idx in range(nsrc):
+                    ax.scatter(traj_pts[:,0,src_idx], traj_pts[:,2,src_idx])
+                    ax.text(traj_pts[0,0,src_idx], traj_pts[0,2,src_idx], 'start')
+                    legends += ['Source trajectory ' + str(src_idx)]
+                ax.legend(legends)
                 ax.set_xlabel('x [m]')
                 ax.set_ylabel('z [m]')
             elif view == 'YZ':
                 ax.set_xlim(0, room_sz[1])
                 ax.set_ylim(0, room_sz[2])
-                ax.scatter(traj_pts[:,1], traj_pts[:,2])
                 ax.scatter(mic_pos[:,1], mic_pos[:,2])
-                ax.text(traj_pts[0,1], traj_pts[0,2], 'start')
-                ax.legend(['Source trajectory', 'Microphone array'])
+                legends = ['Microphone array']
+                for src_idx in range(nsrc):
+                    ax.scatter(traj_pts[:,1,src_idx], traj_pts[:,2,src_idx])
+                    ax.text(traj_pts[0,1,src_idx], traj_pts[0,2,src_idx], 'start')
+                    legends += ['Source trajectory ' + str(src_idx)]
+                ax.legend(legends)
                 ax.set_xlabel('y [m]')
                 ax.set_ylabel('z [m]')
 
         # plt.show()
-        if save_path is not None:
+        if save_path is not None: 
             plt.savefig(save_path + 'room')
         plt.close()
 
@@ -531,7 +559,8 @@ class RandomMicSigDataset(Dataset):
             acoustic_scene.T60_specify = T60_specify
             acoustic_scene.T60_sabine = T60_sabine
 
-            # acoustic_scene.source_vad = vad[:,0:num_source] 
+            # acoustic_scene.source_vad = vad[:,0:num_source] # use webrtcvad
+            # acoustic_scene.mic_vad = [] # use snr
             # acoustic_scene.DOA = []
             acoustic_scene.TDOA = []
             acoustic_scene.DRR = []
@@ -611,6 +640,7 @@ class RandomMicSigDatasetOri(Dataset):
         if 'sig' in self.return_data:
             acoustic_scene = self.getRandomScene(gen_mode='sig')
             mic_signals = acoustic_scene.simulate()
+            # self.plotScene(room_sz=acoustic_scene.room_sz, traj_pts=acoustic_scene.traj_pts, mic_pos=acoustic_scene.mic_pos, view='XY', save_path='./'+str(idx)+'_')
 
             if self.transforms is not None:
                 for t in self.transforms:
@@ -634,66 +664,82 @@ class RandomMicSigDatasetOri(Dataset):
                 return mic_signals, gts
 
     def genTrajectory(self, room_sz, array_pos, array_setup, min_src_array_dist, min_src_boundary_dist, num_source, traj_pt_mode='time'):
-        src_pos_min = np.array([0.0, 0.0, 0.0]) + np.array([min_src_boundary_dist, min_src_boundary_dist, min_src_boundary_dist])
-        src_pos_max = room_sz - np.array([min_src_boundary_dist, min_src_boundary_dist, min_src_boundary_dist])
-        if array_setup.arrayType == 'planar_linear':   
-            # suited cases: annotation is symetric about end-fire direction (like TDOA, not DOA)
-            # src can be at any 3D point in half-plane space
-            if np.sum(array_setup.orV) > 0:
-                src_pos_min[np.nonzero(array_setup.orV)] = array_pos[np.nonzero(array_setup.orV)] 
-                src_pos_min += min_src_array_dist * np.abs(array_setup.orV)
-            else:
-                src_pos_max[np.nonzero(array_setup.orV)] = array_pos[np.nonzero(array_setup.orV)] 
-                src_pos_max -= min_src_array_dist * np.abs(array_setup.orV)
-
-        # elif array_setup.arrayType == 'planar': 
-        #     # suited cases: annotation is not symetric about end-fire direction (like DOA, not TDOA), front-back confusion exists, only half plane is set
-        #     # src can be at any planar point in the all-plane space
-        #     direction_candidates = ['x', 'y', '-x', '-y']
-        #     direction = random.sample(direction_candidates, 1)[0]
-        #     if direction == 'x':
-        #         src_pos_min[0] = array_pos[0] + min_src_array_dist 
-        #     elif direction == '-x':
-        #         src_pos_max[0] = array_pos[0] - min_src_array_dist 
-        #     elif direction == 'y':
-        #         src_pos_min[1] = array_pos[1] + min_src_array_dist 
-        #     elif direction == '-y':
-        #         src_pos_max[1] = array_pos[1] - min_src_array_dist 
-        #     else:
-        #         raise Exception('Unrecognized direction~')
-        #     src_pos_min[2] = array_pos[2] - 0.0
-        #     src_pos_max[2] = array_pos[2] + 0.0
-        #     # self.plot_room(room_sz=room_sz, pos_src=src_pos_min[np.newaxis, :], pos_rcv=array_pos[np.newaxis, :], pos_noise=src_pos_max[np.newaxis, :], save_path='/data/home/yangbing/Re-SSL/exp/')
-        #     # src_pos = np.concatenate((src_pos_min[np.newaxis, :], src_pos_max[np.newaxis, :]), axis=0)
-        #     # self.plotScene(room_sz=room_sz, pos_src=src_pos, pos_rcv=array_pos[np.newaxis, :], view='XY', save_path='./')
-            
-        # if array_setup.arrayType == '3D': 
-        #     # suited cases: annotation is not symetric about end-fire direction (like DOA, not TDOA), front-back confusion not exists, all plane is set
-        #     # src can be at some 3D point in the all-plane space
-        #     direction_candidates = ['x', 'y', '-x', '-y']
-        #     direction = random.sample(direction_candidates, 1)[0]
-        #     if direction == 'x':
-        #         src_pos_min[0] = array_pos[0] + min_src_array_dist 
-        #     elif direction == '-x':
-        #         src_pos_max[0] = array_pos[0] - min_src_array_dist 
-        #     elif direction == 'y':
-        #         src_pos_min[1] = array_pos[1] + min_src_array_dist 
-        #     elif direction == '-y':
-        #         src_pos_max[1] = array_pos[1] - min_src_array_dist 
-        #     else:
-        #         raise Exception('Unrecognized direction~')
-        #     src_array_relative_height = 0.3
-        #     src_pos_min[2] = array_pos[2] - src_array_relative_height
-        #     src_pos_max[2] = array_pos[2] + src_array_relative_height
-                
-        else:
-            raise Exception('Undefined array type~')
-
-        for i in range(3):
-            assert src_pos_min[i]<=src_pos_max[i], 'Src postion range error: '+str(src_pos_min[i])+ '>' + str(src_pos_max[i])
-
         traj_pts = np.zeros((self.nb_points, 3, num_source))
         for source_idx in range(num_source):
+            src_pos_min = np.array([0.0, 0.0, 0.0]) + np.array([min_src_boundary_dist, min_src_boundary_dist, min_src_boundary_dist])
+            src_pos_max = room_sz - np.array([min_src_boundary_dist, min_src_boundary_dist, min_src_boundary_dist])
+            if array_setup.arrayType == 'planar_linear':   
+                # suited cases: annotation is symetric about end-fire direction (like TDOA, not DOA), front-back confusion not exists, half-plane is set
+                # src can be at any 3D point in half-plane space
+                if np.sum(array_setup.orV) > 0:
+                    src_pos_min[np.nonzero(array_setup.orV)] = array_pos[np.nonzero(array_setup.orV)] 
+                    src_pos_min += min_src_array_dist * np.abs(array_setup.orV)
+                else:
+                    src_pos_max[np.nonzero(array_setup.orV)] = array_pos[np.nonzero(array_setup.orV)] 
+                    src_pos_max -= min_src_array_dist * np.abs(array_setup.orV)
+
+            # if array_setup.arrayType == 'planar_linear':   
+            #     # suited cases: annotation is symetric about end-fire direction (like DOA, not TDOA), front-back confusion exists, half-plane is set
+            #     # src can be at any planar point in half-plane space
+            #     assert (array_setup.orV==[0,1,0]) | (array_setup.orV==[0,-1,0]) | (array_setup.orV==[1,0,0]) | (array_setup.orV==[-1,0,0]), 'array orientation must along x or y axis'
+            #     if array_setup.orV[0] == 1:
+            #         src_pos_min[0] = array_pos[0] + min_src_array_dist 
+            #     elif array_setup.orV[0] == -1:
+            #         src_pos_max[0] = array_pos[0] - min_src_array_dist 
+            #     elif array_setup.orV[1] == 1:
+            #         src_pos_min[1] = array_pos[1] + min_src_array_dist 
+            #     elif array_setup.orV[1] == -1:
+            #         src_pos_max[1] = array_pos[1] - min_src_array_dist 
+
+            # if array_setup.arrayType == 'planar': 
+            #     # suited cases: annotation is not symetric about end-fire direction (like DOA), front-back confusion not exists, all plane is set
+            #     # src can be at any planar point in the all-plane space
+            #     assert array_setup.mic_rotate == 0, 'array rotate must be 0'
+            #     direction_candidates = ['x', 'y', '-x', '-y']
+            #     direction = random.sample(direction_candidates, 1)[0]
+            #     if direction == 'x':
+            #         src_pos_min[0] = array_pos[0] + min_src_array_dist 
+            #     elif direction == '-x':
+            #         src_pos_max[0] = array_pos[0] - min_src_array_dist 
+            #     elif direction == 'y':
+            #         src_pos_min[1] = array_pos[1] + min_src_array_dist 
+            #     elif direction == '-y':
+            #         src_pos_max[1] = array_pos[1] - min_src_array_dist 
+            #     else:
+            #         raise Exception('Unrecognized direction~')
+
+            #     src_pos_min[2] = array_pos[2] - 0.0
+            #     src_pos_max[2] = array_pos[2] + 0.0
+                
+            #     # src_pos = np.concatenate((src_pos_min[np.newaxis, :], src_pos_max[np.newaxis, :]), axis=0)
+            #     # self.plotScene(room_sz=room_sz, traj_pts=src_pos, mic_pos=array_setup.mic_pos, view='XY', save_path='./')
+                
+            # if array_setup.arrayType == '3D': 
+            #     # suited cases: annotation is not symetric about end-fire direction (like DOA), front-back confusion not exists, all plane is set
+            #     # src can be at some 3D point in the all-plane space
+            #     assert array_setup.mic_rotate == 0, 'array rotate must be 0'
+            #     direction_candidates = ['x', 'y', '-x', '-y']
+            #     direction = random.sample(direction_candidates, 1)[0]
+            #     if direction == 'x':
+            #         src_pos_min[0] = array_pos[0] + min_src_array_dist 
+            #     elif direction == '-x':
+            #         src_pos_max[0] = array_pos[0] - min_src_array_dist 
+            #     elif direction == 'y':
+            #         src_pos_min[1] = array_pos[1] + min_src_array_dist 
+            #     elif direction == '-y':
+            #         src_pos_max[1] = array_pos[1] - min_src_array_dist 
+            #     else:
+            #         raise Exception('Unrecognized direction~')
+            #     src_array_relative_height = 0.3
+            #     src_pos_min[2] = array_pos[2] - src_array_relative_height
+            #     src_pos_max[2] = array_pos[2] + src_array_relative_height
+
+            else:
+                raise Exception('Undefined array type~')
+
+            for i in range(3):
+                assert src_pos_min[i]<=src_pos_max[i], 'Src postion range error: '+str(src_pos_min[i])+ '>' + str(src_pos_max[i])
+                
             if self.source_state == 'static':
                 src_pos = src_pos_min + np.random.random(3) * (src_pos_max - src_pos_min)
                 traj_pts[:, :, source_idx] = np.ones((self.nb_points, 1)) * src_pos
@@ -748,8 +794,6 @@ class RandomMicSigDatasetOri(Dataset):
                 # if np.random.random(1) < 0.25:
                 #     traj_pts[:,:,source_idx] = np.ones((self.nb_points,1)) * src_pos_ini
                 # traj_pts[:,2,source_idx] = array_pos[2] # if sources and array are in the same horizontal plane
-                
-            # self.plotScene(room_sz=room_sz, pos_src=traj_pts[:,:,0] , pos_rcv=array_pos[np.newaxis, :], view='XY', save_path='./')
             
         if traj_pt_mode != 'distance_sin':
             return traj_pts 
@@ -786,24 +830,27 @@ class RandomMicSigDatasetOri(Dataset):
     #         plt.savefig(save_path + 'room') 
     #     plt.close()
 
-    def plotScene(self, room_sz, pos_src, pos_rcv, view='3D', save_path=None):
+    def plotScene(self, room_sz, traj_pts, mic_pos, view='3D', save_path=None):
         """ Plots the source trajectory and the microphones within the room
+            Args:   traj_pts - (npoints, 3, nsrc)
+                    mic_pos  - (nmic, 3)
         """
         assert view in ['3D', 'XYZ', 'XY', 'XZ', 'YZ']
-        traj_pts = pos_src
-        mic_pos = pos_rcv 
         fig = plt.figure()
+        nsrc = traj_pts.shape[-1]
 
         if view == '3D' or view == 'XYZ':
             ax = Axes3D(fig)
             ax.set_xlim3d(0, room_sz[0])
             ax.set_ylim3d(0, room_sz[1])
             ax.set_zlim3d(0, room_sz[2])
-
-            ax.scatter(traj_pts[:,0], traj_pts[:,1], traj_pts[:,2])
             ax.scatter(mic_pos[:,0], mic_pos[:,1], mic_pos[:,2])
-            ax.text(traj_pts[0,0], traj_pts[0,1], traj_pts[0,2], 'start')
-
+            legends = ['Microphone array']
+            for src_idx in range(nsrc):
+                ax.scatter(traj_pts[:,0,src_idx], traj_pts[:,1,src_idx], traj_pts[:,2,src_idx])
+                ax.text(traj_pts[0,0,src_idx], traj_pts[0,1,src_idx], traj_pts[0,2,src_idx], 'start')
+                legends += ['Source trajectory ' + str(src_idx)]
+            ax.legend(legends)
             # ax.set_title('$T_{60}$' + ' = {:.3f}s, SNR = {:.1f}dB'.format(self.T60, self.SNR))
             ax.set_xlabel('x [m]')
             ax.set_ylabel('y [m]')
@@ -816,33 +863,42 @@ class RandomMicSigDatasetOri(Dataset):
             if view == 'XY':
                 ax.set_xlim(0, room_sz[0])
                 ax.set_ylim(0, room_sz[1])
-                ax.scatter(traj_pts[:,0], traj_pts[:,1])
                 ax.scatter(mic_pos[:,0], mic_pos[:,1])
-                ax.text(traj_pts[0,0], traj_pts[0,1], 'start')
-                ax.legend(['Source trajectory', 'Microphone array'])
+                legends = ['Microphone array']
+                for src_idx in range(nsrc):
+                    ax.scatter(traj_pts[:,0,src_idx], traj_pts[:,1,src_idx])
+                    ax.text(traj_pts[0,0,src_idx], traj_pts[0,1,src_idx], 'start')
+                    legends += ['Source trajectory ' + str(src_idx)]
+                ax.legend(legends)
                 ax.set_xlabel('x [m]')
                 ax.set_ylabel('y [m]')
             elif view == 'XZ':
                 ax.set_xlim(0, room_sz[0])
                 ax.set_ylim(0, room_sz[2])
-                ax.scatter(traj_pts[:,0], traj_pts[:,2])
                 ax.scatter(mic_pos[:,0], mic_pos[:,2])
-                ax.text(traj_pts[0,0], traj_pts[0,2], 'start')
-                ax.legend(['Source trajectory', 'Microphone array'])
+                legends = ['Microphone array']
+                for src_idx in range(nsrc):
+                    ax.scatter(traj_pts[:,0,src_idx], traj_pts[:,2,src_idx])
+                    ax.text(traj_pts[0,0,src_idx], traj_pts[0,2,src_idx], 'start')
+                    legends += ['Source trajectory ' + str(src_idx)]
+                ax.legend(legends)
                 ax.set_xlabel('x [m]')
                 ax.set_ylabel('z [m]')
             elif view == 'YZ':
                 ax.set_xlim(0, room_sz[1])
                 ax.set_ylim(0, room_sz[2])
-                ax.scatter(traj_pts[:,1], traj_pts[:,2])
                 ax.scatter(mic_pos[:,1], mic_pos[:,2])
-                ax.text(traj_pts[0,1], traj_pts[0,2], 'start')
-                ax.legend(['Source trajectory', 'Microphone array'])
+                legends = ['Microphone array']
+                for src_idx in range(nsrc):
+                    ax.scatter(traj_pts[:,1,src_idx], traj_pts[:,2,src_idx])
+                    ax.text(traj_pts[0,1,src_idx], traj_pts[0,2,src_idx], 'start')
+                    legends += ['Source trajectory ' + str(src_idx)]
+                ax.legend(legends)
                 ax.set_xlabel('y [m]')
                 ax.set_ylabel('z [m]')
 
         # plt.show()
-        if save_path is not None:
+        if save_path is not None: 
             plt.savefig(save_path + 'room')
         plt.close()
 
@@ -1035,7 +1091,8 @@ class RandomMicSigDatasetOri(Dataset):
             acoustic_scene.T60_specify = T60_specify
             acoustic_scene.T60_sabine = T60_sabine
 
-            # acoustic_scene.source_vad = vad[:,0:num_source] # a mask
+            # acoustic_scene.source_vad = vad[:,0:num_source] # use webrtcvad
+            # acoustic_scene.mic_vad = [] # use snr
             # acoustic_scene.DOA = []
             acoustic_scene.TDOA = []
             acoustic_scene.DRR = []

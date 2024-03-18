@@ -11,6 +11,7 @@ import pandas as pd
 # import librosa # cause CPU overload, for data generation (scipy.signal.resample, librosa.resample) 
 import soundfile
 import webrtcvad
+import gpuRIR
 from collections import namedtuple
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -98,6 +99,7 @@ class AcousticScene:
                 else: # to be written
                     mic_sig = 0  
                     dp_mic_sig = 0
+                    raise Exception('Uncomplete code for RIR-Source-Conv for moving source')
                     # mixeventsig = 481.6989*ctf_ltv_direct(self.source_signal[:, source_idx], RIRs[:, :, riridx], ir_times, self._fs_mix, self._stft_winsize_moving) / float(len(eventsig))
 
             mic_signals_sources += [mic_sig]
@@ -122,12 +124,33 @@ class AcousticScene:
         mic_signals_sources = mic_signals_sources / value
         dp_mic_signals_sources = dp_mic_signals_sources / value
 
+        # Use the signal-to-noise ratio (dp_mic_signals/mic_signals) to compute the VAD
+        # must combine with clean silence of source signals, to avoid the random results when a smaller value divided by a smaller value
+        # the denominator is the mixed signals of multiple sources, which may be problematic when the number of sources is larger
+        # segment-level results approximate to webrtc
+        if hasattr(self, 'mic_vad'):
+            if hasattr(self, 'mic_vad'):
+                sig_len = mic_signals.shape[0]
+                win_len = int(self.fs * 0.032) # 32ms 
+                win_shift_ratio = 1
+                nt = int((sig_len - win_len*(1-win_shift_ratio)) / (win_len*win_shift_ratio))
+                self.mic_vad_sources = np.zeros((nsample, num_source))
+                th = 0.001**2
+                for t_idx in range(nt):
+                    st = int(t_idx * win_len * win_shift_ratio)
+                    ed = st + win_len 
+                    dp_mic_signal_sources_sch = dp_mic_signals_sources[st:ed, 0, :]
+                    mic_signal_sources_sch = mic_signals[st:ed, 0]
+                    win_engergy_ratio = np.sum(dp_mic_signal_sources_sch**2, axis=0) / (np.sum(mic_signal_sources_sch**2, axis=0) + eps) 
+                    self.mic_vad_sources[st:ed, :] = win_engergy_ratio[np.newaxis, :].repeat(win_len, axis=0) 
+                self.mic_vad = np.sum(self.mic_vad_sources, axis=1) #>= th
+
         # Apply the propagation delay to the VAD information if it exists
-        if hasattr(self, 'source_vad'): 
+        elif hasattr(self, 'source_vad'): 
             self.mic_vad_sources = []  # binary value, for vad of separate sensor signals of sources
             for source_idx in range(num_source):
                 if gpuConv:
-                    vad = gpuRIR.simulateTrajectory(self.source_vad[:, source_idx], self.dp_RIRs_sources[:, :, :, source_idx], timestamps=self.timestamps, fs=self.fs)
+                    vad = gpuRIR.simulateTrajectory(self.source_vad[:, source_idx], dp_RIRs_sources[:, :, :, source_idx], timestamps=self.timestamps, fs=self.fs)
                 vad_sources = vad[0:nsample, :].mean(axis=1) > vad[0:nsample, :].max() * 1e-3
                 self.mic_vad_sources += [vad_sources] 
             self.mic_vad_sources = np.array(self.mic_vad_sources).transpose(1, 0)

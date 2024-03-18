@@ -15,8 +15,8 @@ parser.add_argument('--gpu-id', type=str, default='7', metavar='GPU', help='GPU 
 parser.add_argument('--wnoise', action='store_true', default=False, help='with noise (default: False)')
 parser.add_argument('--save-orisrc', action='store_true', default=False, help='save original source signal (default: False)')
 parser.add_argument('--sources', type=int, nargs='+', default=[1], metavar='Sources', help='number of sources (default: 1)')
-parser.add_argument('--source-state', type=str, default='static', metavar='SourceState', help='state of sources (default: Mobile)')
-parser.add_argument('--data-op', type=str, default='save', metavar='DataOp', help='operation for generated data (default: Save)') # ['save', 'read']
+parser.add_argument('--source-state', type=str, default='static', metavar='SourceState', help='state of sources (default: Static)')
+parser.add_argument('--data-op', type=str, default='save', metavar='DataOp', help='operation for generated data (default: Save)')  
 args = parser.parse_args()
 os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_id)
 
@@ -74,7 +74,7 @@ if __name__ == '__main__':
         if args.source_state == 'static':
             traj_points = 1 # number of RIRs per trajectory
         elif args.source_state == 'mobile':
-            traj_points = T//0.1 # number of RIRs per trajectory (one RIR per 0.1s)
+            traj_points = int(T/0.1) # number of RIRs per trajectory (one RIR per 0.1s)
         else:
             raise Exception('Source state mode unrecognized~')
 
