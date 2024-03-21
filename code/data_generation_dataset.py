@@ -198,7 +198,8 @@ class RandomMicSigDataset(Dataset):
             raise Exception('Undefined array type~')
 
         for i in range(3):
-            assert src_pos_min[i]<=src_pos_max[i], 'Src postion range error: '+str(src_pos_min[i])+ '>' + str(src_pos_max[i])
+            assert src_pos_min[i]<=src_pos_max[i], 'Src postion range error: '+str(src_pos_min[i])+ '>' + str(src_pos_max[i]) + '(array boundary dist >= src boundary dist + src array dist)'
+
 
         traj_pts = np.zeros((self.nb_points, 3, num_source))
         for source_idx in range(num_source):
@@ -270,100 +271,77 @@ class RandomMicSigDataset(Dataset):
         dist = np.sqrt(np.sum((pos_current - pos0)**2))
         return np.abs(dist - desired_dist)
     
-    # def plot_room(self, room_sz, pos_src, pos_rcv, pos_noise=None, save_path=None):
-        
-    #     plt.close('all')
-    #     fig = plt.figure(figsize=(10, 8))
-    #     ax = Axes3D(fig)
-    #     fig.add_axes(ax)
-    #     ax.scatter(pos_rcv[:, 0], pos_rcv[:, 1], pos_rcv[:, 2])
-    #     if len(pos_rcv) > 2:
-    #         # draw the first half mics with different color for checking the rotation
-    #         ax.scatter(pos_rcv[:len(pos_rcv) // 2, 0], pos_rcv[:len(pos_rcv) // 2, 1], pos_rcv[:len(pos_rcv) // 2, 2], c='r', s=1)
-    #     ax.scatter(pos_src[:, 0], pos_src[:, 1], pos_src[:, 2], s=5, c='orange')
-    #     if pos_noise is not None and len(pos_noise) > 0:
-    #         ax.scatter(pos_noise[:, 0], pos_noise[:, 1], pos_noise[:, 2], s=30, c='green')
+    # def plotScene(self, room_sz, traj_pts, mic_pos, view='3D', save_path=None):
+    #     """ Plots the source trajectory and the microphones within the room
+    #         Args:   traj_pts - (npoints, 3, nsrc)
+    #                 mic_pos  - (nmic, 3)
+    #     """
+    #     assert view in ['3D', 'XYZ', 'XY', 'XZ', 'YZ']
+    #     fig = plt.figure()
+    #     nsrc = traj_pts.shape[-1]
 
-    #     ax.set(xlabel="X", ylabel="Y", zlabel="Z")
-    #     ax.set_xlim3d([0, room_sz[0]])
-    #     ax.set_ylim3d([0, room_sz[1]])
-    #     ax.set_zlim3d([0, room_sz[2]])
+    #     if view == '3D' or view == 'XYZ':
+    #         ax = Axes3D(fig)
+    #         ax.set_xlim3d(0, room_sz[0])
+    #         ax.set_ylim3d(0, room_sz[1])
+    #         ax.set_zlim3d(0, room_sz[2])
+    #         ax.scatter(mic_pos[:,0], mic_pos[:,1], mic_pos[:,2])
+    #         legends = ['Microphone array']
+    #         for src_idx in range(nsrc):
+    #             ax.scatter(traj_pts[:,0,src_idx], traj_pts[:,1,src_idx], traj_pts[:,2,src_idx])
+    #             ax.text(traj_pts[0,0,src_idx], traj_pts[0,1,src_idx], traj_pts[0,2,src_idx], 'start')
+    #             legends += ['Source trajectory ' + str(src_idx)]
+    #         ax.legend(legends)
+    #         # ax.set_title('$T_{60}$' + ' = {:.3f}s, SNR = {:.1f}dB'.format(self.T60, self.SNR))
+    #         ax.set_xlabel('x [m]')
+    #         ax.set_ylabel('y [m]')
+    #         ax.set_zlabel('z [m]')
+
+    #     else:
+    #         ax = fig.add_subplot(111)
+    #         plt.gca().set_aspect('equal', adjustable='box')
+
+    #         if view == 'XY':
+    #             ax.set_xlim(0, room_sz[0])
+    #             ax.set_ylim(0, room_sz[1])
+    #             ax.scatter(mic_pos[:,0], mic_pos[:,1])
+    #             legends = ['Microphone array']
+    #             for src_idx in range(nsrc):
+    #                 ax.scatter(traj_pts[:,0,src_idx], traj_pts[:,1,src_idx])
+    #                 ax.text(traj_pts[0,0,src_idx], traj_pts[0,1,src_idx], 'start')
+    #                 legends += ['Source trajectory ' + str(src_idx)]
+    #             ax.legend(legends)
+    #             ax.set_xlabel('x [m]')
+    #             ax.set_ylabel('y [m]')
+    #         elif view == 'XZ':
+    #             ax.set_xlim(0, room_sz[0])
+    #             ax.set_ylim(0, room_sz[2])
+    #             ax.scatter(mic_pos[:,0], mic_pos[:,2])
+    #             legends = ['Microphone array']
+    #             for src_idx in range(nsrc):
+    #                 ax.scatter(traj_pts[:,0,src_idx], traj_pts[:,2,src_idx])
+    #                 ax.text(traj_pts[0,0,src_idx], traj_pts[0,2,src_idx], 'start')
+    #                 legends += ['Source trajectory ' + str(src_idx)]
+    #             ax.legend(legends)
+    #             ax.set_xlabel('x [m]')
+    #             ax.set_ylabel('z [m]')
+    #         elif view == 'YZ':
+    #             ax.set_xlim(0, room_sz[1])
+    #             ax.set_ylim(0, room_sz[2])
+    #             ax.scatter(mic_pos[:,1], mic_pos[:,2])
+    #             legends = ['Microphone array']
+    #             for src_idx in range(nsrc):
+    #                 ax.scatter(traj_pts[:,1,src_idx], traj_pts[:,2,src_idx])
+    #                 ax.text(traj_pts[0,1,src_idx], traj_pts[0,2,src_idx], 'start')
+    #                 legends += ['Source trajectory ' + str(src_idx)]
+    #             ax.legend(legends)
+    #             ax.set_xlabel('y [m]')
+    #             ax.set_ylabel('z [m]')
+
     #     # plt.show()
-    #     if save_path is not None:
+    #     if save_path is not None: 
     #         plt.savefig(save_path + 'room')
     #     plt.close()
-
-    def plotScene(self, room_sz, traj_pts, mic_pos, view='3D', save_path=None):
-        """ Plots the source trajectory and the microphones within the room
-            Args:   traj_pts - (npoints, 3, nsrc)
-                    mic_pos  - (nmic, 3)
-        """
-        assert view in ['3D', 'XYZ', 'XY', 'XZ', 'YZ']
-        fig = plt.figure()
-        nsrc = traj_pts.shape[-1]
-
-        if view == '3D' or view == 'XYZ':
-            ax = Axes3D(fig)
-            ax.set_xlim3d(0, room_sz[0])
-            ax.set_ylim3d(0, room_sz[1])
-            ax.set_zlim3d(0, room_sz[2])
-            ax.scatter(mic_pos[:,0], mic_pos[:,1], mic_pos[:,2])
-            legends = ['Microphone array']
-            for src_idx in range(nsrc):
-                ax.scatter(traj_pts[:,0,src_idx], traj_pts[:,1,src_idx], traj_pts[:,2,src_idx])
-                ax.text(traj_pts[0,0,src_idx], traj_pts[0,1,src_idx], traj_pts[0,2,src_idx], 'start')
-                legends += ['Source trajectory ' + str(src_idx)]
-            ax.legend(legends)
-            # ax.set_title('$T_{60}$' + ' = {:.3f}s, SNR = {:.1f}dB'.format(self.T60, self.SNR))
-            ax.set_xlabel('x [m]')
-            ax.set_ylabel('y [m]')
-            ax.set_zlabel('z [m]')
-
-        else:
-            ax = fig.add_subplot(111)
-            plt.gca().set_aspect('equal', adjustable='box')
-
-            if view == 'XY':
-                ax.set_xlim(0, room_sz[0])
-                ax.set_ylim(0, room_sz[1])
-                ax.scatter(mic_pos[:,0], mic_pos[:,1])
-                legends = ['Microphone array']
-                for src_idx in range(nsrc):
-                    ax.scatter(traj_pts[:,0,src_idx], traj_pts[:,1,src_idx])
-                    ax.text(traj_pts[0,0,src_idx], traj_pts[0,1,src_idx], 'start')
-                    legends += ['Source trajectory ' + str(src_idx)]
-                ax.legend(legends)
-                ax.set_xlabel('x [m]')
-                ax.set_ylabel('y [m]')
-            elif view == 'XZ':
-                ax.set_xlim(0, room_sz[0])
-                ax.set_ylim(0, room_sz[2])
-                ax.scatter(mic_pos[:,0], mic_pos[:,2])
-                legends = ['Microphone array']
-                for src_idx in range(nsrc):
-                    ax.scatter(traj_pts[:,0,src_idx], traj_pts[:,2,src_idx])
-                    ax.text(traj_pts[0,0,src_idx], traj_pts[0,2,src_idx], 'start')
-                    legends += ['Source trajectory ' + str(src_idx)]
-                ax.legend(legends)
-                ax.set_xlabel('x [m]')
-                ax.set_ylabel('z [m]')
-            elif view == 'YZ':
-                ax.set_xlim(0, room_sz[1])
-                ax.set_ylim(0, room_sz[2])
-                ax.scatter(mic_pos[:,1], mic_pos[:,2])
-                legends = ['Microphone array']
-                for src_idx in range(nsrc):
-                    ax.scatter(traj_pts[:,1,src_idx], traj_pts[:,2,src_idx])
-                    ax.text(traj_pts[0,1,src_idx], traj_pts[0,2,src_idx], 'start')
-                    legends += ['Source trajectory ' + str(src_idx)]
-                ax.legend(legends)
-                ax.set_xlabel('y [m]')
-                ax.set_ylabel('z [m]')
-
-        # plt.show()
-        if save_path is not None: 
-            plt.savefig(save_path + 'room')
-        plt.close()
 
     def genRIR(self, room_sz, beta, T60, array_setup, traj_pts):
         if T60 == 0:
@@ -640,6 +618,7 @@ class RandomMicSigDatasetOri(Dataset):
         if 'sig' in self.return_data:
             acoustic_scene = self.getRandomScene(gen_mode='sig')
             mic_signals = acoustic_scene.simulate()
+            # acoustic_scene.plotScene( view='XY', save_path='./'+str(idx)+'_')
             # self.plotScene(room_sz=acoustic_scene.room_sz, traj_pts=acoustic_scene.traj_pts, mic_pos=acoustic_scene.mic_pos, view='XY', save_path='./'+str(idx)+'_')
 
             if self.transforms is not None:
@@ -738,7 +717,7 @@ class RandomMicSigDatasetOri(Dataset):
                 raise Exception('Undefined array type~')
 
             for i in range(3):
-                assert src_pos_min[i]<=src_pos_max[i], 'Src postion range error: '+str(src_pos_min[i])+ '>' + str(src_pos_max[i])
+                assert src_pos_min[i]<=src_pos_max[i], 'Src postion range error: '+str(src_pos_min[i])+ '>' + str(src_pos_max[i]) + '(array boundary dist >= src boundary dist + src array dist)'
                 
             if self.source_state == 'static':
                 src_pos = src_pos_min + np.random.random(3) * (src_pos_max - src_pos_min)
@@ -806,101 +785,78 @@ class RandomMicSigDatasetOri(Dataset):
         pos_current = line + osc
         dist = np.sqrt(np.sum((pos_current - pos0)**2))
         return np.abs(dist - desired_dist)
-    
-    # def plot_room(self, room_sz, pos_src, pos_rcv, pos_noise=None, save_path=None):
 
-    #     plt.close('all')
-    #     fig = plt.figure(figsize=(10, 8))
-    #     ax = Axes3D(fig)
-    #     fig.add_axes(ax)
-    #     ax.scatter(pos_rcv[:, 0], pos_rcv[:, 1], pos_rcv[:, 2])
-    #     if len(pos_rcv) > 2:
-    #         # draw the first half mics with different color for checking the rotation
-    #         ax.scatter(pos_rcv[:len(pos_rcv) // 2, 0], pos_rcv[:len(pos_rcv) // 2, 1], pos_rcv[:len(pos_rcv) // 2, 2], c='r', s=1)
-    #     ax.scatter(pos_src[:, 0], pos_src[:, 1], pos_src[:, 2], s=5, c='orange')
-    #     if pos_noise is not None and len(pos_noise) > 0:
-    #         ax.scatter(pos_noise[:, 0], pos_noise[:, 1], pos_noise[:, 2], s=30, c='green')
+    # def plotScene(self, room_sz, traj_pts, mic_pos, view='3D', save_path=None):
+    #     """ Plots the source trajectory and the microphones within the room
+    #         Args:   traj_pts - (npoints, 3, nsrc)
+    #                 mic_pos  - (nmic, 3)
+    #     """
+    #     assert view in ['3D', 'XYZ', 'XY', 'XZ', 'YZ']
+    #     fig = plt.figure()
+    #     nsrc = traj_pts.shape[-1]
 
-    #     ax.set(xlabel="X", ylabel="Y", zlabel="Z")
-    #     ax.set_xlim3d([0, room_sz[0]])
-    #     ax.set_ylim3d([0, room_sz[1]])
-    #     ax.set_zlim3d([0, room_sz[2]])
+    #     if view == '3D' or view == 'XYZ':
+    #         ax = Axes3D(fig)
+    #         ax.set_xlim3d(0, room_sz[0])
+    #         ax.set_ylim3d(0, room_sz[1])
+    #         ax.set_zlim3d(0, room_sz[2])
+    #         ax.scatter(mic_pos[:,0], mic_pos[:,1], mic_pos[:,2])
+    #         legends = ['Microphone array']
+    #         for src_idx in range(nsrc):
+    #             ax.scatter(traj_pts[:,0,src_idx], traj_pts[:,1,src_idx], traj_pts[:,2,src_idx])
+    #             ax.text(traj_pts[0,0,src_idx], traj_pts[0,1,src_idx], traj_pts[0,2,src_idx], 'start')
+    #             legends += ['Source trajectory ' + str(src_idx)]
+    #         ax.legend(legends)
+    #         # ax.set_title('$T_{60}$' + ' = {:.3f}s, SNR = {:.1f}dB'.format(self.T60, self.SNR))
+    #         ax.set_xlabel('x [m]')
+    #         ax.set_ylabel('y [m]')
+    #         ax.set_zlabel('z [m]')
+
+    #     else:
+    #         ax = fig.add_subplot(111)
+    #         plt.gca().set_aspect('equal', adjustable='box')
+
+    #         if view == 'XY':
+    #             ax.set_xlim(0, room_sz[0])
+    #             ax.set_ylim(0, room_sz[1])
+    #             ax.scatter(mic_pos[:,0], mic_pos[:,1])
+    #             legends = ['Microphone array']
+    #             for src_idx in range(nsrc):
+    #                 ax.scatter(traj_pts[:,0,src_idx], traj_pts[:,1,src_idx])
+    #                 ax.text(traj_pts[0,0,src_idx], traj_pts[0,1,src_idx], 'start')
+    #                 legends += ['Source trajectory ' + str(src_idx)]
+    #             ax.legend(legends)
+    #             ax.set_xlabel('x [m]')
+    #             ax.set_ylabel('y [m]')
+    #         elif view == 'XZ':
+    #             ax.set_xlim(0, room_sz[0])
+    #             ax.set_ylim(0, room_sz[2])
+    #             ax.scatter(mic_pos[:,0], mic_pos[:,2])
+    #             legends = ['Microphone array']
+    #             for src_idx in range(nsrc):
+    #                 ax.scatter(traj_pts[:,0,src_idx], traj_pts[:,2,src_idx])
+    #                 ax.text(traj_pts[0,0,src_idx], traj_pts[0,2,src_idx], 'start')
+    #                 legends += ['Source trajectory ' + str(src_idx)]
+    #             ax.legend(legends)
+    #             ax.set_xlabel('x [m]')
+    #             ax.set_ylabel('z [m]')
+    #         elif view == 'YZ':
+    #             ax.set_xlim(0, room_sz[1])
+    #             ax.set_ylim(0, room_sz[2])
+    #             ax.scatter(mic_pos[:,1], mic_pos[:,2])
+    #             legends = ['Microphone array']
+    #             for src_idx in range(nsrc):
+    #                 ax.scatter(traj_pts[:,1,src_idx], traj_pts[:,2,src_idx])
+    #                 ax.text(traj_pts[0,1,src_idx], traj_pts[0,2,src_idx], 'start')
+    #                 legends += ['Source trajectory ' + str(src_idx)]
+    #             ax.legend(legends)
+    #             ax.set_xlabel('y [m]')
+    #             ax.set_ylabel('z [m]')
+
     #     # plt.show()
-    #     if save_path is not None:
-    #         plt.savefig(save_path + 'room') 
+    #     if save_path is not None: 
+    #         plt.savefig(save_path + 'room')
     #     plt.close()
-
-    def plotScene(self, room_sz, traj_pts, mic_pos, view='3D', save_path=None):
-        """ Plots the source trajectory and the microphones within the room
-            Args:   traj_pts - (npoints, 3, nsrc)
-                    mic_pos  - (nmic, 3)
-        """
-        assert view in ['3D', 'XYZ', 'XY', 'XZ', 'YZ']
-        fig = plt.figure()
-        nsrc = traj_pts.shape[-1]
-
-        if view == '3D' or view == 'XYZ':
-            ax = Axes3D(fig)
-            ax.set_xlim3d(0, room_sz[0])
-            ax.set_ylim3d(0, room_sz[1])
-            ax.set_zlim3d(0, room_sz[2])
-            ax.scatter(mic_pos[:,0], mic_pos[:,1], mic_pos[:,2])
-            legends = ['Microphone array']
-            for src_idx in range(nsrc):
-                ax.scatter(traj_pts[:,0,src_idx], traj_pts[:,1,src_idx], traj_pts[:,2,src_idx])
-                ax.text(traj_pts[0,0,src_idx], traj_pts[0,1,src_idx], traj_pts[0,2,src_idx], 'start')
-                legends += ['Source trajectory ' + str(src_idx)]
-            ax.legend(legends)
-            # ax.set_title('$T_{60}$' + ' = {:.3f}s, SNR = {:.1f}dB'.format(self.T60, self.SNR))
-            ax.set_xlabel('x [m]')
-            ax.set_ylabel('y [m]')
-            ax.set_zlabel('z [m]')
-
-        else:
-            ax = fig.add_subplot(111)
-            plt.gca().set_aspect('equal', adjustable='box')
-
-            if view == 'XY':
-                ax.set_xlim(0, room_sz[0])
-                ax.set_ylim(0, room_sz[1])
-                ax.scatter(mic_pos[:,0], mic_pos[:,1])
-                legends = ['Microphone array']
-                for src_idx in range(nsrc):
-                    ax.scatter(traj_pts[:,0,src_idx], traj_pts[:,1,src_idx])
-                    ax.text(traj_pts[0,0,src_idx], traj_pts[0,1,src_idx], 'start')
-                    legends += ['Source trajectory ' + str(src_idx)]
-                ax.legend(legends)
-                ax.set_xlabel('x [m]')
-                ax.set_ylabel('y [m]')
-            elif view == 'XZ':
-                ax.set_xlim(0, room_sz[0])
-                ax.set_ylim(0, room_sz[2])
-                ax.scatter(mic_pos[:,0], mic_pos[:,2])
-                legends = ['Microphone array']
-                for src_idx in range(nsrc):
-                    ax.scatter(traj_pts[:,0,src_idx], traj_pts[:,2,src_idx])
-                    ax.text(traj_pts[0,0,src_idx], traj_pts[0,2,src_idx], 'start')
-                    legends += ['Source trajectory ' + str(src_idx)]
-                ax.legend(legends)
-                ax.set_xlabel('x [m]')
-                ax.set_ylabel('z [m]')
-            elif view == 'YZ':
-                ax.set_xlim(0, room_sz[1])
-                ax.set_ylim(0, room_sz[2])
-                ax.scatter(mic_pos[:,1], mic_pos[:,2])
-                legends = ['Microphone array']
-                for src_idx in range(nsrc):
-                    ax.scatter(traj_pts[:,1,src_idx], traj_pts[:,2,src_idx])
-                    ax.text(traj_pts[0,1,src_idx], traj_pts[0,2,src_idx], 'start')
-                    legends += ['Source trajectory ' + str(src_idx)]
-                ax.legend(legends)
-                ax.set_xlabel('y [m]')
-                ax.set_ylabel('z [m]')
-
-        # plt.show()
-        if save_path is not None: 
-            plt.savefig(save_path + 'room')
-        plt.close()
 
     def genRIR(self, room_sz, beta, T60, array_setup, traj_pts):
         if T60 == 0:

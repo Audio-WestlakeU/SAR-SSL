@@ -93,7 +93,7 @@ print('# Parameters (M):', round(nparam_sum, 2), [key+': '+str(round(nparam[key]
 if (args.pretrain):
 	
 	print('Pre-Training stage!')
-	set_seed(args.seed)
+	# set_seed(args.seed)
 	num_stop_th = 1
 	nepoch = args.nepoch
 

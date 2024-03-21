@@ -22,7 +22,6 @@ class EmbedEncoder(nn.Module):
 
         self.sig_shape = sig_shape
         self.patch_shape = patch_shape
-        # self.dembed_in = dembed_in
         self.dembed = dembed
         self.device = device
         self.model = model

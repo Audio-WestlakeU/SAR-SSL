@@ -361,96 +361,96 @@ class PatchMask(nn.Module):
             raise Exception('Patch mode is unrecognized')
 
 
-# class DPIPD(nn.Module):
-#     """ Complex-valued Direct-path inter-channel phase difference	
-# 	"""
+class DPIPD(nn.Module):
+    """ Complex-valued Direct-path inter-channel phase difference	
+	"""
 
-#     def __init__(self, ndoa_candidate, mic_location, nf=257, fre_max=8000, ch_mode='M', speed=343.0):
-#         super(DPIPD, self).__init__()
+    def __init__(self, ndoa_candidate, mic_location, nf=257, fre_max=8000, ch_mode='M', speed=343.0):
+        super(DPIPD, self).__init__()
 
-#         self.ndoa_candidate = ndoa_candidate
-#         self.mic_location = mic_location
-#         self.nf = nf
-#         self.fre_max = fre_max
-#         self.speed = speed
-#         self.ch_mode = ch_mode
+        self.ndoa_candidate = ndoa_candidate
+        self.mic_location = mic_location
+        self.nf = nf
+        self.fre_max = fre_max
+        self.speed = speed
+        self.ch_mode = ch_mode
 
-#         nmic = mic_location.shape[-2]
-#         nele = ndoa_candidate[0]
-#         nazi = ndoa_candidate[1]
-#         ele_candidate = np.linspace(0, np.pi, nele)
-#         azi_candidate = np.linspace(-np.pi, np.pi, nazi)
-#         ITD = np.empty((nele, nazi, nmic, nmic))  # Time differences, floats
-#         IPD = np.empty((nele, nazi, nf, nmic, nmic))  # Phase differences
-#         fre_range = np.linspace(0.0, fre_max, nf)
-#         for m1 in range(nmic):
-#             for m2 in range(nmic):
-#                 r = np.stack([np.outer(np.sin(ele_candidate), np.cos(azi_candidate)),
-#                      np.outer(np.sin(ele_candidate), np.sin(azi_candidate)),
-#                      np.tile(np.cos(ele_candidate), [nazi, 1]).transpose()], axis=2)
-#                 ITD[:, :, m1, m2] = np.dot(r, mic_location[m2, :] - mic_location[m1, :]) / speed
-#                 IPD[:, :, :, m1, m2] = -2 * np.pi * np.tile(fre_range[np.newaxis, np.newaxis, :], [nele, nazi, 1]) * \
-#                         np.tile(ITD[:, :, np.newaxis, m1, m2], [1, 1, nf])
-#         dpipd_template_ori = np.exp(1j * IPD)
-#         self.dpipd_template = self.data_adjust(dpipd_template_ori) # (nele, nazi, nf, nmic-1) / (nele, nazi, nf, nmic*(nmic-1)/2)
+        nmic = mic_location.shape[-2]
+        nele = ndoa_candidate[0]
+        nazi = ndoa_candidate[1]
+        ele_candidate = np.linspace(0, np.pi, nele)
+        azi_candidate = np.linspace(-np.pi, np.pi, nazi)
+        ITD = np.empty((nele, nazi, nmic, nmic))  # Time differences, floats
+        IPD = np.empty((nele, nazi, nf, nmic, nmic))  # Phase differences
+        fre_range = np.linspace(0.0, fre_max, nf)
+        for m1 in range(nmic):
+            for m2 in range(nmic):
+                r = np.stack([np.outer(np.sin(ele_candidate), np.cos(azi_candidate)),
+                     np.outer(np.sin(ele_candidate), np.sin(azi_candidate)),
+                     np.tile(np.cos(ele_candidate), [nazi, 1]).transpose()], axis=2)
+                ITD[:, :, m1, m2] = np.dot(r, mic_location[m2, :] - mic_location[m1, :]) / speed
+                IPD[:, :, :, m1, m2] = -2 * np.pi * np.tile(fre_range[np.newaxis, np.newaxis, :], [nele, nazi, 1]) * \
+                        np.tile(ITD[:, :, np.newaxis, m1, m2], [1, 1, nf])
+        dpipd_template_ori = np.exp(1j * IPD)
+        self.dpipd_template = self.data_adjust(dpipd_template_ori) # (nele, nazi, nf, nmic-1) / (nele, nazi, nf, nmic*(nmic-1)/2)
 
-#         # 	# import scipy.io
-#         # 	# scipy.io.savemat('dpipd_template_nele_nazi_2nf_nmic-1.mat',{'dpipd_template': self.dpipd_template})
-#         # 	# print(a)
+        # 	# import scipy.io
+        # 	# scipy.io.savemat('dpipd_template_nele_nazi_2nf_nmic-1.mat',{'dpipd_template': self.dpipd_template})
+        # 	# print(a)
 
-#         del ITD, IPD
+        del ITD, IPD
 
-#     def forward(self, source_doa=None):
-#         # source_doa: (nb, ntimestep, 2, nsource)
-#         mic_location = self.mic_location
-#         nf = self.nf
-#         fre_max = self.fre_max
-#         speed = self.speed
+    def forward(self, source_doa=None):
+        # source_doa: (nb, ntimestep, 2, nsource)
+        mic_location = self.mic_location
+        nf = self.nf
+        fre_max = self.fre_max
+        speed = self.speed
 
-#         if source_doa is not None:
-#             source_doa = source_doa.transpose(0, 1, 3, 2) # (nb, ntimestep, nsource, 2)
-#             nmic = mic_location.shape[-2]
-#             nb = source_doa.shape[0]
-#             nsource = source_doa.shape[-2]
-#             ntime = source_doa.shape[-3]
-#             ITD = np.empty((nb, ntime, nsource, nmic, nmic))  # Time differences, floats
-#             IPD = np.empty((nb, ntime, nsource, nf, nmic, nmic))  # Phase differences
-#             fre_range = np.linspace(0.0, fre_max, nf)
+        if source_doa is not None:
+            source_doa = source_doa.transpose(0, 1, 3, 2) # (nb, ntimestep, nsource, 2)
+            nmic = mic_location.shape[-2]
+            nb = source_doa.shape[0]
+            nsource = source_doa.shape[-2]
+            ntime = source_doa.shape[-3]
+            ITD = np.empty((nb, ntime, nsource, nmic, nmic))  # Time differences, floats
+            IPD = np.empty((nb, ntime, nsource, nf, nmic, nmic))  # Phase differences
+            fre_range = np.linspace(0.0, fre_max, nf)
 
-#             for m1 in range(nmic):
-#                 for m2 in range(nmic):
-#                     r = np.stack([np.sin(source_doa[:, :, :, 0]) * np.cos(source_doa[:, :, :, 1]),
-#                          np.sin(source_doa[:, :, :, 0]) * np.sin(source_doa[:, :, :, 1]),
-#                          np.cos(source_doa[:, :, :, 0])], axis=3)
-#                     ITD[:, :, :, m1, m2] = np.dot(r, mic_location[m1, :] - mic_location[m2, :]) / speed # t2- t1
-#                     IPD[:, :, :, :, m1, m2] = -2 * np.pi * np.tile(fre_range[np.newaxis, np.newaxis, np.newaxis, :],
-#                          [nb, ntime, nsource, 1]) * np.tile(ITD[:, :, :, np.newaxis, m1, m2], [1, 1, 1, nf])*(-1)  # !!!! delete -1
+            for m1 in range(nmic):
+                for m2 in range(nmic):
+                    r = np.stack([np.sin(source_doa[:, :, :, 0]) * np.cos(source_doa[:, :, :, 1]),
+                         np.sin(source_doa[:, :, :, 0]) * np.sin(source_doa[:, :, :, 1]),
+                         np.cos(source_doa[:, :, :, 0])], axis=3)
+                    ITD[:, :, :, m1, m2] = np.dot(r, mic_location[m1, :] - mic_location[m2, :]) / speed # t2- t1
+                    IPD[:, :, :, :, m1, m2] = -2 * np.pi * np.tile(fre_range[np.newaxis, np.newaxis, np.newaxis, :],
+                         [nb, ntime, nsource, 1]) * np.tile(ITD[:, :, :, np.newaxis, m1, m2], [1, 1, 1, nf])*(-1)  # !!!! delete -1
 
-#             dpipd_ori = np.exp(1j * IPD)
-#             dpipd = self.data_adjust(dpipd_ori) # (nb, ntime, nsource, nf, nmic-1) / (nb, ntime, nsource, nf, nmic*(nmic-1)/2)
+            dpipd_ori = np.exp(1j * IPD)
+            dpipd = self.data_adjust(dpipd_ori) # (nb, ntime, nsource, nf, nmic-1) / (nb, ntime, nsource, nf, nmic*(nmic-1)/2)
 
-#             dpipd = dpipd.transpose(0, 1, 3, 4, 2) # (nb, ntime, nf, nmic-1, nsource)
+            dpipd = dpipd.transpose(0, 1, 3, 4, 2) # (nb, ntime, nf, nmic-1, nsource)
 
-#         else:
-#             dpipd = None
+        else:
+            dpipd = None
 
-#         return self.dpipd_template, dpipd
+        return self.dpipd_template, dpipd
 
-#     def data_adjust(self, data):
-#         # change dimension from (..., nmic-1) to (..., nmic*(nmic-1)/2)
-#         if self.ch_mode == 'M':
-#             data_adjust = data[..., 0, 1:] # (..., nmic-1)
-#         elif self.ch_mode == 'MM':
-#             nmic = data.shape[-1]
-#             data_adjust = np.empty(data.shape[:-2] + (int(nmic*(nmic-1)/2),), dtype=np.complex64)
-#             for mic_idx in range(nmic - 1):
-#                 st = int((2 * nmic - 2 - mic_idx + 1) * mic_idx / 2)
-#                 ed = int((2 * nmic - 2 - mic_idx) * (mic_idx + 1) / 2)
-#                 data_adjust[..., st:ed] = data[..., mic_idx, (mic_idx+1):] # (..., nmic*(nmic-1)/2)
-#         else:
-#             raise Exception('Microphone channel mode unrecognised')
+    def data_adjust(self, data):
+        # change dimension from (..., nmic-1) to (..., nmic*(nmic-1)/2)
+        if self.ch_mode == 'M':
+            data_adjust = data[..., 0, 1:] # (..., nmic-1)
+        elif self.ch_mode == 'MM':
+            nmic = data.shape[-1]
+            data_adjust = np.empty(data.shape[:-2] + (int(nmic*(nmic-1)/2),), dtype=np.complex64)
+            for mic_idx in range(nmic - 1):
+                st = int((2 * nmic - 2 - mic_idx + 1) * mic_idx / 2)
+                ed = int((2 * nmic - 2 - mic_idx) * (mic_idx + 1) / 2)
+                data_adjust[..., st:ed] = data[..., mic_idx, (mic_idx+1):] # (..., nmic*(nmic-1)/2)
+        else:
+            raise Exception('Microphone channel mode unrecognised')
 
-#         return data_adjust
+        return data_adjust
 
 
 # class GCC(nn.Module):

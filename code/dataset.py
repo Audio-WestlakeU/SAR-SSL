@@ -156,10 +156,10 @@ class AcousticScene:
             self.mic_vad_sources = np.array(self.mic_vad_sources).transpose(1, 0)
             self.mic_vad = np.sum(self.mic_vad_sources, axis=1) > 0.5  # binary value, for vad of mixed sensor signals of sources
 
-        if hasattr(self, 'DOA'):
+        if hasattr(self, 'DOA'):  # [ele, azi]
             self.DOA = np.zeros((nsample, 2, num_source))  # (nsample, 2, nsource)
             for source_idx in range(num_source):
-                self.DOA[:, :, source_idx] = cart2sph(self.trajectory[:, :, source_idx] - self.array_pos)[:, 0: 2]
+                self.DOA[:, :, source_idx] = cart2sph(self.trajectory[:, :, source_idx] - self.array_pos)[:, [1,0]]
 
         if hasattr(self, 'TDOA'): 
             npoint = self.traj_pts.shape[0]
@@ -1467,7 +1467,7 @@ if __name__ == "__main__":
 
     ## Noise
     T = 20
-    RIRdataset = RIRDataset(fs=16000, data_dir='/data/home/yangbing/Re-SSL/data/RIR-pretrain5-2/', dataset_sz=4)
+    RIRdataset = RIRDataset(fs=16000, data_dir='SAR-SSL/data/RIR-pretrain5-2/', dataset_sz=4)
     acoustic_scene = RIRdataset[1]
 
     souDataset = WSJ0Dataset(path=dirs['sousig_pretrain'], T=T, fs=16000, num_source=1, size=50)

@@ -120,6 +120,37 @@ def create_learning_rate_schedule(total_steps, base, decay_type, warmup_steps, l
 
     return step_fn
 
+def forgetting_norm(input, num_frame_set=None):
+    """
+        Function: Using the mean value of the near frames to normalization
+        Args:
+            input: feature [B, C, F, T]
+            num_frame_set: length of the training time frames, used for calculating smooth factor
+        Returns:
+            normed feature
+        Ref: Online Monaural Speech Enhancement using Delayed Subband LSTM, INTERSPEECH, 2020
+    """
+    assert input.ndim == 4
+    batch_size, num_channels, num_freqs, num_frames = input.size()
+    input = input.reshape(batch_size, num_channels * num_freqs, num_frames)
+
+    if num_frame_set == None:
+        num_frame_set = copy.deepcopy(num_frames)
+
+    mu = 0
+    mu_list = []
+    for frame_idx in range(num_frames):
+        if num_frames<=num_frame_set:
+            alpha = (frame_idx - 1) / (frame_idx + 1)
+        else:
+            alpha = (num_frame_set - 1) / (num_frame_set + 1)
+        current_frame_mu = torch.mean(input[:, :, frame_idx], dim=1).reshape(batch_size, 1) # [B, 1]
+        mu = alpha * mu + (1 - alpha) * current_frame_mu
+        mu_list.append(mu)
+    mu = torch.stack(mu_list, dim=-1) # [B, 1, T]
+    output = mu.reshape(batch_size, 1, 1, num_frames)
+
+    return output
 
 def save_file(mic_signal, acoustic_scene, sig_path, acous_path):
     """ Save audio and annotation files
@@ -141,6 +172,7 @@ def load_file(acoustic_scene, sig_path, acous_path, sig_tar_fs=16000):
     if sig_path is not None:
         mic_signal, fs = soundfile.read(sig_path)
         if (fs != sig_tar_fs):
+            print('Loaded signals are resampled~')
             mic_signal = scipy.signal.resample_poly(mic_signal, sig_tar_fs, fs)
 
     if acous_path is not None:
