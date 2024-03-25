@@ -4,6 +4,7 @@
 
 import random
 import numpy as np
+import deepcopy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -118,6 +119,7 @@ class AddChToBatch(nn.Module):
     def __init__(self, ch_mode):
         super(AddChToBatch, self).__init__()
         self.ch_mode = ch_mode
+        assert self.ch_mode in ['MM', 'M', '1'], 'Unrecognized microphone channel mode~'
 
     def forward(self, data):
         nb = data.shape[0]
@@ -139,25 +141,32 @@ class AddChToBatch(nn.Module):
                     ed = b_idx*int((nch-1)*nch/2) + int((2*nch-2-ch_idx)*(ch_idx+1)/2)
                     data_adjust[st:ed, 0, ...] = data[b_idx, ch_idx:ch_idx+1, ...].expand((nch-ch_idx-1,)+data.shape[2:])
                     data_adjust[st:ed, 1, ...] = data[b_idx, ch_idx+1:, ...]
+                    
+        else:
+            data_adjust = deepcopy(data)       
 
         return data_adjust.contiguous()
 
 class RemoveChFromBatch(nn.Module):
-    """ Change dimension from (nb*nmic, nt, nf) to (nb, nmic, nt, nf)
+	""" Change dimension from (nb*nmic, nt, nf) to (nb, nmic, nt, nf)
 	"""
-    def __init__(self, ch_mode):
-        super(RemoveChFromBatch, self).__init__()
-        self.ch_mode = ch_mode
+	def __init__(self, ch_mode):
+		super(RemoveChFromBatch, self).__init__()
+		self.ch_mode = ch_mode
+		assert self.ch_mode in ['MM', 'M', '1'], 'Unrecognized microphone channel mode~'
 
-    def forward(self, data, nb):
-        nmic = int(data.shape[0]/nb)
-        data_adjust = torch.zeros((nb, nmic)+data.shape[1:], dtype=torch.float32).to(data.device)
-        for b_idx in range(nb):
-            st = b_idx * nmic
-            ed = (b_idx + 1) * nmic
-            data_adjust[b_idx, ...] = data[st:ed, ...]
+	def forward(self, data, nb):
+		if (self.ch_mode == 'MM') | (self.ch_mode == 'M'):
+			nmic = int(data.shape[0]/nb)
+			data_adjust = torch.zeros((nb, nmic)+data.shape[1:], dtype=torch.float32).to(data.device)
+			for b_idx in range(nb):
+				st = b_idx * nmic
+				ed = (b_idx + 1) * nmic
+				data_adjust[b_idx, ...] = data[st:ed, ...]
+		else:
+			data_adjust = deepcopy(data)
 
-        return data_adjust.contiguous()
+		return data_adjust.contiguous()
 
 
 
@@ -362,14 +371,15 @@ class PatchMask(nn.Module):
 
 
 class DPIPD(nn.Module):
-    """ Complex-valued Direct-path inter-channel phase difference	
+    """ Complex-valued Direct-path inter-channel phase difference (torch version)	
 	"""
-
     def __init__(self, ndoa_candidate, mic_location, nf=257, fre_max=8000, ch_mode='M', speed=343.0):
         super(DPIPD, self).__init__()
 
-        self.ndoa_candidate = ndoa_candidate
+        if not isinstance(mic_location, torch.Tensor):
+            mic_location = torch.from_numpy(mic_location)
         self.mic_location = mic_location
+        self.ndoa_candidate = ndoa_candidate
         self.nf = nf
         self.fre_max = fre_max
         self.speed = speed
@@ -378,71 +388,70 @@ class DPIPD(nn.Module):
         nmic = mic_location.shape[-2]
         nele = ndoa_candidate[0]
         nazi = ndoa_candidate[1]
-        ele_candidate = np.linspace(0, np.pi, nele)
-        azi_candidate = np.linspace(-np.pi, np.pi, nazi)
-        ITD = np.empty((nele, nazi, nmic, nmic))  # Time differences, floats
-        IPD = np.empty((nele, nazi, nf, nmic, nmic))  # Phase differences
-        fre_range = np.linspace(0.0, fre_max, nf)
+        ele_candidate = torch.linspace(0, torch.pi, nele)
+        azi_candidate = torch.linspace(-torch.pi, torch.pi, nazi)
+        ITD = torch.empty((nele, nazi, nmic, nmic))  # Time differences, floats
+        IPD = torch.empty((nele, nazi, nf, nmic, nmic))  # Phase differences
+        fre_range = torch.linspace(0.0, fre_max, nf)
+        r = torch.stack([torch.outer(torch.sin(ele_candidate), torch.cos(azi_candidate)),
+                     torch.outer(torch.sin(ele_candidate), torch.sin(azi_candidate)),
+                     torch.tile(torch.cos(ele_candidate), [nazi, 1]).transpose(1,0)], axis=2)
         for m1 in range(nmic):
             for m2 in range(nmic):
-                r = np.stack([np.outer(np.sin(ele_candidate), np.cos(azi_candidate)),
-                     np.outer(np.sin(ele_candidate), np.sin(azi_candidate)),
-                     np.tile(np.cos(ele_candidate), [nazi, 1]).transpose()], axis=2)
-                ITD[:, :, m1, m2] = np.dot(r, mic_location[m2, :] - mic_location[m1, :]) / speed
-                IPD[:, :, :, m1, m2] = -2 * np.pi * np.tile(fre_range[np.newaxis, np.newaxis, :], [nele, nazi, 1]) * \
-                        np.tile(ITD[:, :, np.newaxis, m1, m2], [1, 1, nf])
-        dpipd_template_ori = np.exp(1j * IPD)
-        self.dpipd_template = self.data_adjust(dpipd_template_ori) # (nele, nazi, nf, nmic-1) / (nele, nazi, nf, nmic*(nmic-1)/2)
+                ITD[:, :, m1, m2] = (r * (mic_location[m2, :] - mic_location[m1, :])).sum(dim=-1) / speed
+                IPD[:, :, :, m1, m2] = -2 * torch.pi * torch.tile(fre_range[np.newaxis, np.newaxis, :], [nele, nazi, 1]) * \
+                        torch.tile(ITD[:, :, np.newaxis, m1, m2], [1, 1, nf])
 
+        dpipd_template_ori = torch.exp(1j * IPD)
+        self.dpipd_template = self.data_adjust(dpipd_template_ori) # (nele, nazi, nf, nmic-1) / (nele, nazi, nf, nmic*(nmic-1)/2)
+        self.doa_candidate = [ele_candidate, azi_candidate]         
         # 	# import scipy.io
         # 	# scipy.io.savemat('dpipd_template_nele_nazi_2nf_nmic-1.mat',{'dpipd_template': self.dpipd_template})
         # 	# print(a)
-
+        
         del ITD, IPD
 
     def forward(self, source_doa=None):
         # source_doa: (nb, ntimestep, 2, nsource)
-        mic_location = self.mic_location
-        nf = self.nf
-        fre_max = self.fre_max
-        speed = self.speed
-
         if source_doa is not None:
-            source_doa = source_doa.transpose(0, 1, 3, 2) # (nb, ntimestep, nsource, 2)
+            device = source_doa.device
+            nf = self.nf
+            fre_max = self.fre_max
+            speed = self.speed
+            mic_location = self.mic_location.to(device)
+            source_doa = source_doa.permute(0, 1, 3, 2) # (nb, ntimestep, nsource, 2)
             nmic = mic_location.shape[-2]
             nb = source_doa.shape[0]
             nsource = source_doa.shape[-2]
             ntime = source_doa.shape[-3]
-            ITD = np.empty((nb, ntime, nsource, nmic, nmic))  # Time differences, floats
-            IPD = np.empty((nb, ntime, nsource, nf, nmic, nmic))  # Phase differences
-            fre_range = np.linspace(0.0, fre_max, nf)
-
+            ITD = torch.empty((nb, ntime, nsource, nmic, nmic)).to(device)  # Time differences, floats
+            IPD = torch.empty((nb, ntime, nsource, nf, nmic, nmic)).to(device) # Phase differences
+            fre_range = torch.linspace(0.0, fre_max, nf).to(device)
+            r = torch.stack([torch.sin(source_doa[:, :, :, 0]) * torch.cos(source_doa[:, :, :, 1]),
+                         torch.sin(source_doa[:, :, :, 0]) * torch.sin(source_doa[:, :, :, 1]),
+                         torch.cos(source_doa[:, :, :, 0])], axis=3)
             for m1 in range(nmic):
-                for m2 in range(nmic):
-                    r = np.stack([np.sin(source_doa[:, :, :, 0]) * np.cos(source_doa[:, :, :, 1]),
-                         np.sin(source_doa[:, :, :, 0]) * np.sin(source_doa[:, :, :, 1]),
-                         np.cos(source_doa[:, :, :, 0])], axis=3)
-                    ITD[:, :, :, m1, m2] = np.dot(r, mic_location[m1, :] - mic_location[m2, :]) / speed # t2- t1
-                    IPD[:, :, :, :, m1, m2] = -2 * np.pi * np.tile(fre_range[np.newaxis, np.newaxis, np.newaxis, :],
-                         [nb, ntime, nsource, 1]) * np.tile(ITD[:, :, :, np.newaxis, m1, m2], [1, 1, 1, nf])*(-1)  # !!!! delete -1
-
-            dpipd_ori = np.exp(1j * IPD)
+                for m2 in range(nmic): 
+                    ITD[:, :, :, m1, m2] =(r * (mic_location[m1, :] - mic_location[m2, :])).sum(dim=-1) / speed # t2- t1
+                    IPD[:, :, :, :, m1, m2] = -2 * torch.pi * torch.tile(fre_range[np.newaxis, np.newaxis, np.newaxis, :],
+                         [nb, ntime, nsource, 1]) * torch.tile(ITD[:, :, :, np.newaxis, m1, m2], [1, 1, 1, nf])*(-1)   # !!!! delete -1
+            dpipd_ori = torch.exp(1j * IPD)
             dpipd = self.data_adjust(dpipd_ori) # (nb, ntime, nsource, nf, nmic-1) / (nb, ntime, nsource, nf, nmic*(nmic-1)/2)
 
-            dpipd = dpipd.transpose(0, 1, 3, 4, 2) # (nb, ntime, nf, nmic-1, nsource)
+            dpipd = dpipd.permute(0, 1, 3, 4, 2) # (nb, ntime, nf, nmic-1, nsource)
 
         else:
             dpipd = None
 
-        return self.dpipd_template, dpipd
+        return self.dpipd_template, dpipd, self.doa_candidate
 
     def data_adjust(self, data):
-        # change dimension from (..., nmic-1) to (..., nmic*(nmic-1)/2)
+        # change dimension from (..., nmic) to (..., nmic-1)/(..., nmic*(nmic-1)/2)
         if self.ch_mode == 'M':
             data_adjust = data[..., 0, 1:] # (..., nmic-1)
         elif self.ch_mode == 'MM':
             nmic = data.shape[-1]
-            data_adjust = np.empty(data.shape[:-2] + (int(nmic*(nmic-1)/2),), dtype=np.complex64)
+            data_adjust = torch.empty(data.shape[:-2] + (int(nmic*(nmic-1)/2),), dtype=torch.complex64)
             for mic_idx in range(nmic - 1):
                 st = int((2 * nmic - 2 - mic_idx + 1) * mic_idx / 2)
                 ed = int((2 * nmic - 2 - mic_idx) * (mic_idx + 1) / 2)
@@ -451,7 +460,7 @@ class DPIPD(nn.Module):
             raise Exception('Microphone channel mode unrecognised')
 
         return data_adjust
-
+    
 
 # class GCC(nn.Module):
 # 	""" Compute the Generalized Cross Correlation of the inputs.

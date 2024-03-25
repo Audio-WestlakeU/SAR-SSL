@@ -25,8 +25,7 @@ import copy
 from data_generation_opt import opt
 from common.utils import set_seed, save_file, load_file
 from dataset import Parameter, AcousticScene, ArraySetup
-import dataset as at_dataset
-from data_generation_dataset import dualch_array_setup, RandomMicSigDataset
+import dataset as at_dataset 
 
 opts = opt(args.wnoise)
 room_setting = opts.room_setting
@@ -79,7 +78,7 @@ if __name__ == '__main__':
             raise Exception('Source state mode unrecognized~')
 
         # Array
-        array_setup = dualch_array_setup
+        array_setup = at_dataset.dualch_array_setup
 
         # Source signal
         # sourceDataset = at_dataset.LibriSpeechDataset(
@@ -105,7 +104,7 @@ if __name__ == '__main__':
 
         # Room acoustics
         return_data = ['sig', 'scene']
-        dataset = RandomMicSigDataset(
+        dataset = at_dataset.RandomMicSigDataset(
             sourceDataset=sourceDataset,
             num_source=Parameter(args.sources, discrete=True),
             source_state=args.source_state,
