@@ -220,12 +220,12 @@ class EmbedEncoder(nn.Module):
                 embed = self.embed.forward(embed, add_same_one)  # (nbatch, npatch, dembed)
         
         if len(self.model) == 1:
-            if (model[0] == 'crnn') | (model[0] == 'crnn-sim') | (model[0] == 'tcrnn'):
+            if (self.model[0] == 'crnn') | (self.model[0] == 'crnn-sim') | (self.model[0] == 'tcrnn'):
                 embed = embed.reshape(nbatch, npatch, dpatch, nch)
                 embed = self.patch_recover.forward(embed)  # (nbatch, nf, nt, nch)
                 embed = embed.permute(0, 3, 1, 2)  # (nbatch, nch, nf, nt)
                 embed = self.crnn(embed)  # (nbatch, nt, dembed) = (nbatch, npatch, *) suited for frame-wise patch spliting only
-            elif model[0] == 'fn':
+            elif self.model[0] == 'fn':
                 embed = embed.reshape(nbatch, npatch, dpatch, nch)
                 embed = self.patch_recover.forward(embed)  # (nbatch, nf, nt, nch)
                 embed, fb_skip, nb_skip = self.embed1(embed) # (nb, nf, nt, hid_dim)
@@ -235,21 +235,21 @@ class EmbedEncoder(nn.Module):
                 embed = embed.permute(0, 2, 1, 3) # (nbatch, nt, nf, nch)
                 embed = embed.reshape(nbatch, embed.shape[1], -1)
                 embed = self.t_embed_proj(embed)
-            elif model[0] == 'nbc':
+            elif self.model[0] == 'nbc':
                 if self.use_cls:
                     cls_token = self.cls_token.expand(nbatch, -1, -1)
                     embed = torch.cat((embed, cls_token), dim=1)
                 embed = self.embed.forward(embed, add_same_one)  # (nbatch, npatch, dembed)
-            elif model[0] == 'spatialnet':
+            elif self.model[0] == 'spatialnet':
                 pass                
-            elif (self.model[0] == 'resnet') | (model[0] == 'res2net') | (model[0] == 'densenet'):
+            elif (self.model[0] == 'resnet') | (self.model[0] == 'res2net') | (self.model[0] == 'densenet'):
                 embed = embed.reshape(nbatch, npatch, dpatch, nch)
                 embed = self.patch_recover.forward(embed)  # (nbatch, nf, nt, nch)
                 embed = embed.permute(0, 3, 1, 2)  # (nbatch, nch, nf, nt)
                 embed = self.cnn(embed)  # (nbatch, nch', nf, nt)  
                 embed = self.cnn_proj(embed)  # (nbatch, dembed, nf, nt) 
                 embed = embed.reshape(nbatch, embed.shape[1], -1).permute(0, 2, 1)  #  (nbatch, npatch, dembed)
-            elif model[0] == 'unet':
+            elif self.model[0] == 'unet':
                 embed = embed.reshape(nbatch, npatch, dpatch, nch)
                 embed = self.patch_recover.forward(embed)  # (nbatch, nf, nt, nch)
                 embed = embed.permute(0, 3, 1, 2)  # (nbatch, nch, nf, nt)
@@ -294,7 +294,6 @@ class EmbedDecoder(nn.Module):
 
         if model[1] == 'fc':
             dff = dembed_out * 3
-            print(dff)
             self.proj = nn.Sequential(
                 nn.Linear(dembed, dff), 
                 nn.ReLU(), 

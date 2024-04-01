@@ -1848,16 +1848,16 @@ class RandomMicSigDatasetOri(Dataset):
             #     # src can be at any planar point in half-plane space
             #     assert (array_setup.orV==[0,1,0]) | (array_setup.orV==[0,-1,0]) | (array_setup.orV==[1,0,0]) | (array_setup.orV==[-1,0,0]), 'array orientation must along x or y axis'
             #     if array_setup.orV[0] == 1:
-            #         src_pos_min[0] = array_pos[0] + min_src_array_dist 
+            #         src_pos_min[0] = np.maximum(array_pos[0] + min_src_array_dist, src_pos_min[0])
             #     elif array_setup.orV[0] == -1:
-            #         src_pos_max[0] = array_pos[0] - min_src_array_dist 
+            #         src_pos_max[0] = np.minimum(array_pos[0] - min_src_array_dist, src_pos_max[0])
             #     elif array_setup.orV[1] == 1:
-            #         src_pos_min[1] = array_pos[1] + min_src_array_dist 
+            #         src_pos_min[1] = np.maximum(array_pos[1] + min_src_array_dist, src_pos_min[1])
             #     elif array_setup.orV[1] == -1:
-            #         src_pos_max[1] = array_pos[1] - min_src_array_dist 
-            #     src_pos_min[2] = array_pos[2] - 0.0
-            #     src_pos_max[2] = array_pos[2] + 0.0
-                    
+            #         src_pos_max[1] = np.minimum(array_pos[1] - min_src_array_dist, src_pos_max[1])
+            #     src_pos_min[2] = np.maximum(array_pos[2] - 0.0, src_pos_min[2])
+            #     src_pos_max[2] = np.minimum(array_pos[2] + 0.0, src_pos_max[2])
+ 
             # elif array_setup.arrayType == 'planar': 
             #     # suited cases: annotation is not symetric about end-fire direction (like DOA), front-back confusion not exists, all plane is set
             #     # src can be at any planar point in the all-plane space
@@ -1865,20 +1865,18 @@ class RandomMicSigDatasetOri(Dataset):
             #     direction_candidates = ['x', 'y', '-x', '-y']
             #     direction = random.sample(direction_candidates, 1)[0]
             #     if direction == 'x':
-            #         src_pos_min[0] = array_pos[0] + min_src_array_dist 
+            #         src_pos_min[0] = np.maximum(array_pos[0] + min_src_array_dist, src_pos_min[0])
             #     elif direction == '-x':
-            #         src_pos_max[0] = array_pos[0] - min_src_array_dist 
+            #         src_pos_max[0] = np.minimum(array_pos[0] - min_src_array_dist, src_pos_max[0])
             #     elif direction == 'y':
-            #         src_pos_min[1] = array_pos[1] + min_src_array_dist 
+            #         src_pos_min[1] = np.maximum(array_pos[1] + min_src_array_dist, src_pos_min[1])
             #     elif direction == '-y':
-            #         src_pos_max[1] = array_pos[1] - min_src_array_dist 
+            #         src_pos_max[1] = np.minimum(array_pos[1] - min_src_array_dist, src_pos_max[1]) 
             #     else:
             #         raise Exception('Unrecognized direction~')
-            #     src_pos_min[2] = array_pos[2] - 0.0
-            #     src_pos_max[2] = array_pos[2] + 0.0
-                
+            #     src_pos_min[2] = np.maximum(array_pos[2] - 0.0, src_pos_min[2])
+            #     src_pos_max[2] = np.minimum(array_pos[2] + 0.0, src_pos_max[2])
             #     # src_pos = np.concatenate((src_pos_min[np.newaxis, :], src_pos_max[np.newaxis, :]), axis=0)
-            #     # self.plotScene(room_sz=room_sz, traj_pts=src_pos, mic_pos=array_setup.mic_pos, view='XY', save_path='./')
                 
             # elif array_setup.arrayType == '3D': 
             #     # suited cases: annotation is not symetric about end-fire direction (like DOA), front-back confusion not exists, all plane is set
@@ -1887,18 +1885,18 @@ class RandomMicSigDatasetOri(Dataset):
             #     direction_candidates = ['x', 'y', '-x', '-y']
             #     direction = random.sample(direction_candidates, 1)[0]
             #     if direction == 'x':
-            #         src_pos_min[0] = array_pos[0] + min_src_array_dist 
+            #         src_pos_min[0] = np.maximum(array_pos[0] + min_src_array_dist, src_pos_min[0])
             #     elif direction == '-x':
-            #         src_pos_max[0] = array_pos[0] - min_src_array_dist 
+            #         src_pos_max[0] = np.minimum(array_pos[0] - min_src_array_dist, src_pos_max[0]) 
             #     elif direction == 'y':
-            #         src_pos_min[1] = array_pos[1] + min_src_array_dist 
+            #         src_pos_min[1] = np.maximum(array_pos[1] + min_src_array_dist, src_pos_min[1])
             #     elif direction == '-y':
-            #         src_pos_max[1] = array_pos[1] - min_src_array_dist 
+            #         src_pos_max[1] = np.minimum(array_pos[1] - min_src_array_dist, src_pos_max[1])  
             #     else:
             #         raise Exception('Unrecognized direction~')
-            #     src_array_relative_height = 0.3
-            #     src_pos_min[2] = array_pos[2] - src_array_relative_height
-            #     src_pos_max[2] = array_pos[2] + src_array_relative_height
+            #     src_array_relative_height = 0.5
+            #     src_pos_min[2] = np.maximum(array_pos[2] - src_array_relative_height, src_pos_min[2]) 
+            #     src_pos_max[2] = np.minimum(array_pos[2] + src_array_relative_height, src_pos_max[2])
 
             else:
                 raise Exception('Undefined array type~')

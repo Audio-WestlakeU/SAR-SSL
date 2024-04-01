@@ -35,7 +35,7 @@ import dataset as at_dataset
 import learner as at_learner
 import model as at_model
 from dataset import ArraySetup
-from common.utils import set_seed, set_random_seed, get_nparams, vis_TSNE, cross_validation_datadir, one_validation_datadir_simdata
+from common.utils import set_seed, set_random_seed, get_nparams, get_flops, vis_TSNE, cross_validation_datadir, one_validation_datadir_simdata
 
 use_cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
@@ -87,6 +87,9 @@ if args.ds_train | args.ds_test:
 layer_keys = ['spec_encoder', 'spat_encoder', 'decoder', 'mlp_head','spec_encoder.patch_embed','spec_encoder.embed','spat_encoder.patch_embed','spat_encoder.embed']
 nparam, nparam_sum = get_nparams(net, param_key_list=layer_keys)
 print('# Parameters (M):', round(nparam_sum, 2), [key+': '+str(round(nparam[key], 2)) for key in nparam.keys()])
+nreim = 2
+flops_forward_eval, _ = get_flops(net, input_shape=(1, nmic, nf, nt, nreim))
+print(f"Flops_forward: {flops_forward_eval:.2f}G/s")
 
 # Training processing
 if (args.ds_train):

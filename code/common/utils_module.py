@@ -4,7 +4,7 @@
 
 import random
 import numpy as np
-import deepcopy
+from copy import deepcopy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

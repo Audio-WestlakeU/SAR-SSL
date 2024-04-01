@@ -11,6 +11,7 @@ import pickle
 import soundfile 
 import matplotlib.pyplot as plt
 import copy
+from torch.utils.flop_counter import FlopCounterMode
 from sklearn.manifold import TSNE
 from sklearn.datasets import load_iris
 from sklearn.decomposition import PCA
@@ -37,14 +38,13 @@ def detect_infnan(data, mode='torch', info=''):
 def set_seed(seed):
     """ Fix random seed
     """ 
-    np.random.seed(seed)
-    random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.cuda.manual_seed(seed)
+    np.random.seed(seed) # python
+    random.seed(seed)   # random
+    torch.manual_seed(seed) # CPU
+    torch.cuda.manual_seed_all(seed) # multi-GPU
+    torch.cuda.manual_seed(seed)    # current GPU
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.enabled = False # avoid-CUDNN_STATUS_NOT_SUPPORTED #(commont if use cpu??)
 
 
 def set_random_seed(seed):
@@ -55,7 +55,7 @@ def set_random_seed(seed):
     torch.cuda.manual_seed(seed)
 
 
-def get_nparams(model, param_key_list):
+def get_nparams(model, param_key_list=[]):
     """ Get the number of parameters of specified key 
     """ 
     nparam_sum = 0.0
@@ -69,6 +69,23 @@ def get_nparams(model, param_key_list):
                 nparam[param_key_specified] += value.numel()/1000000
 
     return nparam, nparam_sum
+
+
+def get_flops(model, input_shape):
+    """ Get FLOPS (G/s)
+    """ 
+    model.cuda()
+    x = torch.randn((input_shape)).cuda()
+    with FlopCounterMode(model, display=False) as fcm:
+        y = model(x)
+        flops_forward_eval = fcm.get_total_flops()/4e9
+    for k, v in fcm.get_flop_counts().items():
+        ss = f"{k}: {{"
+        for kk, vv in v.items():
+            ss += f" {str(kk)}:{vv}"
+        ss += " }"
+
+    return flops_forward_eval, ss
 
 
 def get_learning_rate(optimizer):
