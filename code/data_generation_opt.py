@@ -9,7 +9,7 @@ class opt():
         self.work_dir = r'~'
         self.work_dir = os.path.abspath(os.path.expanduser(self.work_dir))
 
-        # room setting
+        # acoustic setting
         if wnoise:
             snr_range = [15,30]
             noise_type = ['diffuse_white']
@@ -18,10 +18,24 @@ class opt():
             noise_type = ['']
         room_size_range = [[3, 3, 2.5], [15, 10, 6]]
         T60_range = [0.2, 1.3]
-
         array_pos_ratio_range = [[0.2, 0.2, 0.1], [0.8, 0.8, 0.5]]
         min_src_array_dist = 0.3
-        min_src_boundary_dist = 0.3
+        min_src_boundary_dist = 0.3 
+        sound_speed = 343.0
+        self.room_setting = {
+            'snr_range': snr_range,
+            'noise_type': noise_type,
+            'room_size_range': room_size_range,
+            't60_range': T60_range,
+            'array_pos_ratio_range': array_pos_ratio_range,
+            'min_src_array_dist': min_src_array_dist,
+            'min_src_boundary_dist': min_src_boundary_dist,
+            'sound_speed': sound_speed, 
+        }
+        self.micsig_setting = {
+            'T': 4.112,  # time length (s) 
+            'fs': 16000  # sampling rate (Hz)
+        }
 
         # visualization instance
         if ins_enable:
@@ -32,15 +46,6 @@ class opt():
             ins_flag = 'ins'
         else:
             ins_flag = ''
-        self.room_setting = {
-            'snr_range': snr_range,
-            'noise_type': noise_type,
-            'room_size_range': room_size_range,
-            't60_range': T60_range,
-            'array_pos_ratio_range': array_pos_ratio_range,
-            'min_src_array_dist': min_src_array_dist,
-            'min_src_boundary_dist': min_src_boundary_dist,
-        }
 
         # version setting
         self.rir_ver = ''

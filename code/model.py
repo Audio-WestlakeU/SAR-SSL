@@ -340,6 +340,9 @@ class EmbedDecoder(nn.Module):
             embed = embed.permute(0, 3, 1, 2)  # (nbatch, x, nf, nt)
             embed = self.proj(embed)  # (nbatch, dembed_out/npatch, ..., ...)
             embed = embed.reshape(nbatch, embed.shape[1], npatch).permute(0, 2, 1)  # (nbatch, npatch, dembed_out)
+            
+        elif self.model[0] == '':
+            pass
 
         return embed
 
@@ -650,7 +653,7 @@ class SARSSL(nn.Module):
             # vec_patch_pred =  pred_patches_spat
             
             ## use spatial & spectral encoders
-            vec_patch_pred = self.spec_spat_decoder.forward(embed)  # (nbatch, npatch, dpatch*nch+dembed) / (nbatch, npatch, 2*dembed)
+            vec_patch_pred = self.spec_spat_decoder.forward(embed)  # (nbatch, npatch, dpatch*nch)
             vec_patch_pred = vec_patch_pred.reshape(nbatch, npatch, dpatch, 2, nmic)  # (nbatch, npatch, dpatch, 2, nmic)
             pred_patches = torch.sum(vec_patch_pred * (1 - mask_ch_dense_expand), dim=-1)  # (nbatch, npatch, dpatch, 2)
             loss = self.gen_loss_spec(pred_patches=pred_patches, tar_patches=tar_ch_patches, mask_idx=mask_patch_idx, tar_unmaskch_patches=tar_anotherch_patches, tar_maskch=True)
@@ -789,11 +792,108 @@ class SARSSL(nn.Module):
 
         return mask_patches_fold, pred_patches_fold, tar_patches_fold
 
+
+class MCConformer(nn.Module): 
+    """ 
+    patch_shape: size of each patch, (nf, nt)
+    """
+    def __init__(self, 
+                 sig_shape=[256,256,2,2], 
+                 patch_shape=(256,1), 
+                 spec_model = ['cnn', 'conformer'],
+                 spat_model = ['cnn', 'conformer'],
+                 dembed={'spec': 512, 'spat': 256},
+                 dec_model = ['', 'fc'], 
+                 device='cpu'
+                 ):
+        ## MC-Conformer (CNN_Fre_First+Conformer)
+        # spec_model = ['cnn_f_first', 'conformer']
+        # spat_model = ['cnn_f_first', 'conformer']
+        ## MC-Conformer (CNN+Conformer)
+        # spec_model = ['cnn', 'conformer']
+        # spat_model = ['cnn', 'conformer']
+        ## Conformer
+        # spec_model = ['fc', 'conformer']
+        # spat_model = ['fc', 'conformer']
+        ## CNN + Transformer
+        # spec_model = ['cnn', 'transformer']
+        # spat_model = ['cnn', 'transformer']
+        ## Transformer
+        # spec_model = ['fc', 'transformer']
+        # spat_model = ['fc', 'transformer']
+        # dec_model = ['', 'fc']
+        # dec_model = ['conformer', 'fc']
+        super(MCConformer, self).__init__()
+        nf, nt, nreim, nmic = sig_shape
+        npatch_shape = [int(nf / patch_shape[0]), int(nt / patch_shape[1])]
+        dpatch = patch_shape[0] * patch_shape[1]
+        self.dembed = dembed
+
+        if patch_shape[1]!=1:
+            f_first = True
+        else:
+            f_first = False
+
+        self.patch_split = at_module.PatchSplit(patch_shape=patch_shape, f_first=f_first)
+        self.patch_recover = at_module.PatchRecover(output_shape=(nf, nt), patch_shape=patch_shape, f_first=f_first)
+
+        if f_first:
+            if 'cnn' in spec_model[0]:
+                spec_model[0] = 'cnn_f_first'
+            if 'cnn' in spat_model[1]:
+                spec_model[1] = 'cnn_f_first'
+            
+            print('fre first!')
+        if dembed['spec'] > 0:
+            self.spec_encoder = EmbedEncoder(sig_shape=sig_shape, patch_shape=patch_shape, dembed=dembed['spec'], model=spec_model, 
+                                            mode='spec', use_cls=False, device=device)
+        if dembed['spat'] > 0:
+            self.spat_encoder = EmbedEncoder(sig_shape=sig_shape, patch_shape=patch_shape, dembed=dembed['spat'], model=spat_model, 
+                                        mode='spat', use_cls=False, device=device)
+
+
+        dec_dembed = dembed['spec'] + dembed['spat']
+        self.decoder = EmbedDecoder(sig_shape=sig_shape, patch_shape=patch_shape, dembed=dec_dembed, model=dec_model, use_cls=False)
+        
+    def forward(self, x):
+        
+        data = x.permute(0, 2, 3, 4, 1) # (nbatch, nf, nt, nreim, nmic)
+        
+        ## Patch (frame) spliting
+        vec_patch = self.patch_split(data)  # (nbatch, npatch, dpatch, nreim, nmic)
+        nbatch, npatch, dpatch, _, nmic = vec_patch.shape 
+        vec_patch_reshape = vec_patch.reshape(nbatch, npatch, -1) # (nbatch, npatch, dpatch*nch) 
+        
+        ## Embedding encoding
+        if (self.dembed['spec'] > 0) & (self.dembed['spat'] == 0):
+            embed = self.spec_encoder.forward(vec_patch_reshape)  # (nbatch, npatch, dembed_spec)
+        elif (self.dembed['spec'] == 0) & (self.dembed['spat'] > 0):
+            embed = self.spat_encoder.forward(vec_patch_reshape, add_same_one=False)  # (nbatch, npatch, dembed_spat)
+        elif (self.dembed['spec'] > 0) & (self.dembed['spat'] > 0):
+            embed_spec = self.spec_encoder.forward(vec_patch_reshape)  # (nbatch, npatch, dembed_spec)
+            embed_spat = self.spat_encoder.forward(vec_patch_reshape, add_same_one=False)  # (nbatch, npatch, dembed_spat)
+            embed = torch.cat([embed_spec, embed_spat], dim=2) # (nbatch, npatch, dembed_spec+dembed_spat)
+
+        ## Embedding decoding
+        vec_patch_pred = self.decoder.forward(embed)  # (nbatch, npatch, dpatch*nch) 
+        vec_patch_pred = vec_patch_pred.reshape(nbatch, npatch, dpatch, 2, nmic)  # (nbatch, npatch, dpatch, 2, nmic)
+        
+        ## Patch recovering
+        data_pred = self.patch_recover(vec_patch_pred)  # (nbatch, nf, nt, nreim, nmic)
+        
+        return data_pred 
+
+
 if __name__ == "__main__":
     import torch
     from common.utils import get_nparams
 
-    input = torch.randn((100, 2, 256, 256, 2))
+    nb = 100
+    nf = 256
+    nt = 256
+    nmic = 2
+    nreim = 2
+    input = torch.randn((nb, nmic, nf, nt, nreim))
 
     net = SARSSL(pretrain=True)
     ouput = net(input)
@@ -804,5 +904,15 @@ if __name__ == "__main__":
     nparam, nparam_sum = get_nparams(net, ['spec_encoder', 'spat_encoder', 'decoder', 'mlp_head'])
     print('# Parameters (M):', round(nparam_sum, 2), [key+': '+str(round(nparam[key], 3)) for key in nparam.keys()])
 
+    net = MCConformer(
+                sig_shape=[nf, nt, nreim, nmic], 
+                patch_shape=(nf, 1), 
+                spec_model = ['cnn', 'conformer'],
+                spat_model = ['cnn', 'conformer'],
+                dembed={'spec': 512, 'spat': 256},
+                )
+    ouput = net(input)
+    nparam, nparam_sum = get_nparams(net, ['spec_encoder', 'spat_encoder', 'decoder', 'mlp_head'])
+    print('# Parameters (M):', round(nparam_sum, 2), [key+': '+str(round(nparam[key], 2)) for key in nparam.keys()])
 
 

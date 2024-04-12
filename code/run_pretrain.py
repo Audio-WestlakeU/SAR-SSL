@@ -34,7 +34,7 @@ import dataset as at_dataset
 import learner as at_learner
 import model as at_model
 from dataset import ArraySetup
-from common.utils import set_seed, set_random_seed, set_learning_rate, create_learning_rate_schedule, get_nparams, get_flops, vis_time_fre_data
+from common.utils import set_seed, set_random_seed, set_learning_rate, create_learning_rate_schedule, get_nparams, get_FLOPs, save_config_to_file,vis_time_fre_data
 
 use_cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
@@ -42,18 +42,16 @@ device = torch.device("cuda" if use_cuda else "cpu")
 set_seed(args.seed)
 
 # Save config file
-file_path = dirs['log_pretrain']
-os.makedirs(file_path, exist_ok=True)
-with open(os.path.join(file_path,"config.json"), "w") as json_file:
-	json.dump([args.__dict__, dirs], json_file, indent=4)
-	# json.dump({'args':args.__dict__, 'dirs':dirs.__dict__}, json_file, indent=4)
+os.makedirs(dirs['log_pretrain'], exist_ok=True)
+file_path = os.path.join(dirs['log_pretrain'],"config.json")
+save_config_to_file([args.__dict__, dirs], file_path)
 
 # Acoustic setting parameters
 noise_enable = args.noise_setting['noise_enable']
 snr_range = args.noise_setting['snr_range']
 noise_type_sim = args.noise_setting['noise_type']
 nmic = args.array_setting['nmic']
-speed = args.acoustic_setting['speed']	
+speed = args.acoustic_setting['sound_speed']	
 fs = args.acoustic_setting['fs']
 
 T = 4.112  # Trajectory length (s) 2.064
@@ -89,8 +87,8 @@ layer_keys = ['spec_encoder', 'spat_encoder', 'decoder', 'mlp_head','spec_encode
 nparam, nparam_sum = get_nparams(net, param_key_list=layer_keys)
 print('# Parameters (M):', round(nparam_sum, 2), [key+': '+str(round(nparam[key], 2)) for key in nparam.keys()])
 nreim = 2
-flops_forward_eval, _ = get_flops(net, input_shape=(1, nmic, nf, nt, nreim))
-print(f"Flops_forward: {flops_forward_eval:.2f}G/s")
+flops_forward_eval, _ = get_FLOPs(net, input_shape=(1, nmic, nf, nt, nreim), duration=T)
+print(f"FLOPs_forward: {flops_forward_eval:.2f}G/s")
 
 # Pre-Train
 if (args.pretrain):

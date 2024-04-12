@@ -36,7 +36,7 @@ class opt_pretrain():
         self.array_setting = {'nmic':  2}
 
         # Other acoustic setting
-        self.acoustic_setting = {'speed': 343.0, 'fs': 16000}
+        self.acoustic_setting = {'sound_speed': 343.0, 'fs': 16000}
 
         self.extra_info = '' # needs add '-' when used
 

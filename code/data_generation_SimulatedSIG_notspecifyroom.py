@@ -32,12 +32,13 @@ import tqdm
 import copy
 import scipy.io
 from data_generation_opt import opt
-from common.utils import set_seed, save_file, load_file
+from common.utils import set_seed, save_file, load_file, save_config_to_file
 from dataset import Parameter, AcousticScene, ArraySetup
 import dataset as at_dataset
 
 opts = opt(args.wnoise, args.ins)
 room_setting = opts.room_setting
+micsig_setting = opts.micsig_setting
 dirs = opts.dir()
 
 date_flag = opts.time + ''
@@ -80,9 +81,9 @@ if (args.data_op == 'save'):
     else:
         raise Exception('Stage unrecognized!')
 
-    speed = 343.0
-    fs = 16000
-    T = 4.112  # Trajectory length (s)  
+    # Microphone signal
+    fs = micsig_setting['fs']
+    T = micsig_setting['T']
     if args.source_state == 'static':
         traj_points = 1 # number of RIRs per trajectory
     elif args.source_state == 'mobile':
@@ -113,7 +114,7 @@ if (args.data_op == 'save'):
         nmic = array_setup.mic_pos.shape[0],
         noise_type = Parameter(room_setting['noise_type'], discrete=True),
         noise_path = dirs['noisig_'+args.stage],
-        c = speed)
+        c = room_setting['sound_speed'])
 
     # Room acoustics
     return_data = ['sig', 'scene']
@@ -132,7 +133,7 @@ if (args.data_op == 'save'):
         SNR=Parameter(room_setting['snr_range'][0], room_setting['snr_range'][1]),
         nb_points=traj_points,
         dataset_sz=data_num,
-        c=speed,
+        c=room_setting['sound_speed'],
         transforms=None,
         return_data=return_data,
     )
@@ -181,6 +182,12 @@ if (args.data_op == 'save'):
         # for i in acoustic_scene.__dict__.keys():
         #     print(i, acoustic_scene.__dict__[i])
         save_file(mic_signals, acoustic_scene, sig_path, acous_path)
+        # acoustic_scene.plotScene( view='XY', save_path= save_dir +'/'+str(idx)+'_')
+
+        # config file
+        if idx == 0:
+            file_path = os.path.join(save_dir, 'config_part'+ str(part) +'.json')
+            save_config_to_file([ opts.__dict__, args.__dict__, dirs], file_path)
 
 elif (args.data_op == 'read'):
     class AcousticScene:

@@ -18,8 +18,8 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.optimize import minimize
 from torch.utils.data import Dataset
-from common.utils import load_file
-from common.utils_room_acoustics import add_noise, sou_conv_rir, cart2sph, sph2cart, rt60_from_rirs, dpRIR_from_RIR
+from common.utils import load_file, explore_corpus
+from common.utils_room_acoustics import add_noise, sou_conv_rir, pad_cut_sig_sameutt, pad_cut_sig_samespk, cart2sph, sph2cart, rt60_from_rirs, dpRIR_from_RIR
 
 
 ArraySetup = namedtuple('ArraySetup', 'arrayType, orV, mic_scale, mic_rotate, mic_pos, mic_orV, mic_pattern')
@@ -171,7 +171,7 @@ class AcousticScene:
             self.mic_vad = np.sum(self.mic_vad_sources, axis=1) > 0.5  # binary value, for vad of mixed sensor signals of sources
 
         if hasattr(self, 'DOA'):  # [ele, azi]
-            self.DOA = np.zeros((nsample, 2, num_source))  # (nsample, 2, nsource)
+            self.DOA = np.zeros((nsample, 2, num_source), dtype=np.float32)  # (nsample, 2, nsource)
             for source_idx in range(num_source):
                 self.DOA[:, :, source_idx] = cart2sph(self.trajectory[:, :, source_idx] - self.array_pos)[:, [1,0]]
 
@@ -400,37 +400,27 @@ class AcousticScene:
 ## Source signal Datasets
 
 class WSJ0Dataset(Dataset):
-    """ WSJ0Dataset
+    """ WSJ0Dataset (after 20240403)
         train: /tr 81h (both speaker independent and dependent)
         val: /dt 5h
         test: /et 5h
+        spk/wav
     """
-    def _exploreCorpus(self, path, file_extension):
-        directory_tree = {}
-        for item in os.listdir(path):
-            if os.path.isdir( os.path.join(path, item) ):
-                directory_tree[item] = self._exploreCorpus( os.path.join(path, item), file_extension )
-            elif item.split(".")[-1] == file_extension:
-                directory_tree[ item.split(".")[0] ] = os.path.join(path, item)
-        return directory_tree
-    
     def __init__(self, path, T, fs, num_source=1, size=None):
-        self.corpus = self._exploreCorpus(path, 'wav')
-        self.paths = []
-        file_names = self.corpus.keys()
-        for file_name in file_names:
-            spk_names = self.corpus[file_name].keys()
-            for spk_name in spk_names:
-                wav_names = self.corpus[file_name][spk_name].keys()
-                for wav_name in wav_names:
-                    path = self.corpus[file_name][spk_name][wav_name]
-                    self.paths += [path]
+
+        self.corpus, self.paths = explore_corpus(path, 'wav')
+        self.spkWAVs = []
+        self.spkIDs = []
+        for spks in list(self.corpus.values()):
+            self.spkWAVs += list(spks.values())
+            self.spkIDs += list(spks.keys())
+
         # self.paths.sort()
-        random.shuffle(self.paths)
+        # random.shuffle(self.paths)
         self.fs = fs
         self.T = T
         self.sum_source = num_source
-        self.sz = len(self.paths) if size is None else min([len(self.paths), size])
+        self.sz = len(self.spkIDs) if size is None else size 
 
     def __len__(self):
         return self.sz
@@ -438,39 +428,41 @@ class WSJ0Dataset(Dataset):
     def __getitem__(self, idx):
         if idx < 0: idx = len(self) + idx
 
+        # random speaker IDs
+        spkID_list = [self.spkIDs[idx]]
+        idx_list = [idx]
+        while(len(set(spkID_list))<self.sum_source):
+            idx_othersources = np.random.randint(0, len(self.spkIDs))
+            spkID_list += [self.spkIDs[idx_othersources]]
+            idx_list += [idx_othersources]
+
+        # read speech signals
         s_shape_desired = int(self.T * self.fs)
         s_sources = []
-        assert self.sum_source == 1 # for num_source>1, to be written
-        for s_idx in range(self.sum_source):
-            s = np.array([])
-            while s.shape[0] < s_shape_desired:
-                utterance, fs = soundfile.read(self.paths[idx])
-                if fs != self.fs:
-                    utterance = scipy.signal.resample_poly(utterance, up=self.fs, down=fs)
-                    raise Warning('WSJ0 is downsampled to requrired frequency~')
-                s = np.concatenate([s, utterance])
-            st = random.randint(0, s.shape[0] - s_shape_desired)
-            ed = st + s_shape_desired
-            s = s[st: ed]
+        for source_idx in range(self.sum_source):
+            spkID = spkID_list[source_idx]
+            spkWAVs = self.spkWAVs[idx_list[source_idx]]
+            utt_paths = list(spkWAVs.values())
+            # Get a random speech utterance from specific speaker
+            utt_idx = np.random.randint(0, len(utt_paths))
+            s, fs = soundfile.read(self.paths[utt_idx])
+            if fs != self.fs:
+                s = scipy.signal.resample_poly(s, up=self.fs, down=fs)
+                raise Warning('WSJ0 is downsampled to requrired frequency~')
+            s = pad_cut_sig_samespk(utt_paths, utt_idx, s_shape_desired, self.fs) # pad by the same spk
             s -= s.mean()
+
             s_sources += [s]
         s_sources = np.array(s_sources).transpose(1,0)
 
-        return s_sources
+        return s_sources #, np.ones_like(s_sources)
+    
 
 class LibriSpeechDataset(Dataset):
     """ LibriSpeechDataset (about 1000h)
         https://www.openslr.org/12
-	"""
-
-    def _exploreCorpus(self, path, file_extension):
-        directory_tree = {}
-        for item in os.listdir(path):
-            if os.path.isdir( os.path.join(path, item) ):
-                directory_tree[item] = self._exploreCorpus( os.path.join(path, item), file_extension )
-            elif item.split(".")[-1] == file_extension:
-                directory_tree[ item.split(".")[0] ] = os.path.join(path, item)
-        return directory_tree
+        spk/chapter/spk-chapter-utterance.flac
+    """
 
     def _cleanSilences(self, s, aggressiveness, return_vad=False):
         self.vad.set_mode(aggressiveness)
@@ -487,7 +479,7 @@ class LibriSpeechDataset(Dataset):
         return (s_clean, vad_out) if return_vad else s_clean
 
     def __init__(self, path, T, fs, num_source, size=None, return_vad=False, readers_range=None, clean_silence=True):
-        self.corpus = self._exploreCorpus(path, 'flac')
+        self.corpus, _ = explore_corpus(path, 'flac')
         if readers_range is not None:
             for key in list(map(int, self.nChapters.keys())):
                 if int(key) < readers_range[0] or int(key) > readers_range[1]:
@@ -496,8 +488,8 @@ class LibriSpeechDataset(Dataset):
         self.nReaders = len(self.corpus)
         self.nChapters = {reader: len(self.corpus[reader]) for reader in self.corpus.keys()}
         self.nUtterances = {reader: {
-          chapter: len(self.corpus[reader][chapter]) for chapter in self.corpus[reader].keys()
-         } for reader in self.corpus.keys()}
+        chapter: len(self.corpus[reader][chapter]) for chapter in self.corpus[reader].keys()
+        } for reader in self.corpus.keys()}
 
         self.chapterList = []
         for chapters in list(self.corpus.values()):
@@ -524,42 +516,29 @@ class LibriSpeechDataset(Dataset):
         s_sources = []
         s_clean_sources = []
         vad_out_sources = []
-        speakerID_list = []
+        spkID_list = []
 
         for source_idx in range(self.num_source):
             if source_idx==0:
                 chapter = self.chapterList[idx]
                 utts = list(chapter.keys())
-                spakerID = utts[0].split('-')[0]
+                spkID = utts[0].split('-')[0]
+                spkID_list += [spkID]
             else:
-                idx_othersources = np.random.randint(0, len(self.chapterList))
-                chapter = self.chapterList[idx_othersources]
-                utts = list(chapter.keys())
-                spakerID = utts[0].split('-')[0]
-                while spakerID in speakerID_list:
+                while(len(set(spkID_list))<=source_idx):
                     idx_othersources = np.random.randint(0, len(self.chapterList))
                     chapter = self.chapterList[idx_othersources]
                     utts = list(chapter.keys())
-                    spakerID = utts[0].split('-')[0]
-
-            speakerID_list += [spakerID]
+                    spkID = utts[0].split('-')[0]
+                    spkID_list += [spkID]
 
             utt_paths = list(chapter.values())
             s_shape_desired = int(self.T * self.fs)
             s_clean = np.zeros((s_shape_desired, 1)) # random initialization
             while np.sum(s_clean) == 0: # avoid full-zero s_clean
                 # Get a random speech segment from the selected chapter
-                n = np.random.randint(0, len(chapter))
-                s = np.array([])
-                while s.shape[0] < s_shape_desired:
-                    utterance, fs = soundfile.read(utt_paths[n])
-                    assert fs == self.fs
-                    s = np.concatenate([s, utterance])
-                    n += 1
-                    if n >= len(chapter): n=0
-                st = random.randint(0, s.shape[0] - s_shape_desired)
-                ed = st + s_shape_desired
-                s = s[st: ed]
+                utt_idx = np.random.randint(0, len(chapter))
+                s = pad_cut_sig_samespk(utt_paths, utt_idx, s_shape_desired, self.fs) # pad by the same spk & chapter
                 s -= s.mean()
 
                 # Clean silences, it starts with the highest aggressiveness of webrtcvad,
@@ -584,6 +563,7 @@ class LibriSpeechDataset(Dataset):
             return (s_clean_sources, vad_out_sources) if self.return_vad else s_clean_sources
         else:
             return (s_sources, vad_out_sources) if self.return_vad else s_sources
+        
 
 # Noise signal Dataset
 class NoiseDataset(Dataset):
@@ -594,7 +574,7 @@ class NoiseDataset(Dataset):
         self.noise_type = noise_type # 'diffuse' and 'real_world' cannot exist at the same time
         
         if (noise_path != None) & (('diffuse_xsrc' in noise_type.value_range) | ('real-world' in noise_type.value_range)):
-            _, self.path_set = self._exploreCorpus(noise_path, 'wav')
+            _, self.path_set = explore_corpus(noise_path, 'wav')
             # self.path_set.sort()
         if ('diffuse_xsrc' in noise_type.value_range) | ('real-world' in noise_type.value_range):
             self.sz = len(self.path_set) if size is None else size
@@ -620,28 +600,34 @@ class NoiseDataset(Dataset):
             noise_signal = self.gen_diffuse_noise(noise, mic_pos, c=self.c)
             noise_signal = noise_signal/(np.max(noise_signal)+eps)
 
-        elif noise_type == 'diffuse_babble':
-            # babbles (number of channels) are independent 
-            pass
+        elif noise_type == 'diffuse_babble': # from single-speaker speech dataset
+            # Generate M mutually 'independent' input signals
+            M = mic_pos.shape[0]
+            nsample_desired = int(self.T*self.fs)
+            nspeech_babble = 10
+            noise_M = np.zeros([nsample_desired, M])
+            for m in range(0, M):
+                noise = np.zeros((nsample_desired))
+                for idx in range(nspeech_babble):
+                    idx = random.randint(0, len(self.path_set)-1)
+                    speech, fs = soundfile.read(self.path_set[idx])
+                    if fs != self.fs:
+                        speech = scipy.signal.resample_poly(speech, up=self.fs, down=fs)
+                    speech = pad_cut_sig_sameutt(speech, nsample_desired)
+                    speech = speech - np.mean(speech)
+                    noise += speech
+                noise_M[:, m] = noise 
+            noise_signal = self.gen_diffuse_noise(noise_M, mic_pos, c=self.c)
+            noise_signal = noise_signal/(np.max(noise_signal)+eps)
+            # soundfile.write('noise.wav',noise_signal, self.fs)
+            # print('save')
 
         elif noise_type == 'diffuse_xsrc':
             idx = random.randint(0, len(self.path_set)-1)
             noise, fs = soundfile.read(self.path_set[idx])
 
             nsample_desired = int(self.T * fs * self.nmic)
-            nsample = noise.shape[0]
-            if nsample < nsample_desired:
-                noise_copy = copy.deepcopy(noise)
-                while nsample < nsample_desired:
-                    noise_copy = np.concatenate((noise_copy, noise), axis=0)
-                    nsample = noise_copy.shape[0]
-                st = random.randint(0, nsample - nsample_desired)
-                ed = st + nsample_desired
-                noise_copy = noise_copy[st:ed]
-            else:
-                st = random.randint(0, nsample - nsample_desired)
-                ed = st + nsample_desired
-                noise_copy = noise[st:ed]
+            noise = pad_cut_sig_sameutt(noise, nsample_desired)
 
             if fs != self.fs:
                 noise_copy = scipy.signal.resample_poly(noise_copy, up=self.fs, down=fs)
@@ -656,62 +642,62 @@ class NoiseDataset(Dataset):
             noise_signal = self.gen_diffuse_noise(noise_M, mic_pos, c=self.c)
             noise_signal = noise_signal/(np.max(noise_signal)+eps)
 
-        elif noise_type == 'diffuse_babble_fromRIR':
-            num_source = 20
+        # elif noise_type == 'diffuse_babble_fromRIR':
+        #     num_source = 20
 
-            RIR_is_ok = False
-            while(RIR_is_ok==False):
-                # Trajectory points for noise
-                traj_pts_noise = self.genTrajectory(acoustic_scene.array_setup, acoustic_scene.room_sz, acoustic_scene.array_pos, acoustic_scene.traj_pts.shape[0], num_source) #  (npoint,3,nsource)
+        #     RIR_is_ok = False
+        #     while(RIR_is_ok==False):
+        #         # Trajectory points for noise
+        #         traj_pts_noise = self.genTrajectory(acoustic_scene.array_setup, acoustic_scene.room_sz, acoustic_scene.array_pos, acoustic_scene.traj_pts.shape[0], num_source) #  (npoint,3,nsource)
 
-                # RIRs for noise
-                RIRs_noise = self.genRIR(acoustic_scene.array_setup, acoustic_scene.room_sz, acoustic_scene.beta, acoustic_scene.T60, acoustic_scene.mic_pos, traj_pts_noise) # (npoint, nch, nsample, nsource）
-                late_rev_time = 0/1000
-                RIRs_noise[:, :, :int(late_rev_time*self.fs), :] = 0
+        #         # RIRs for noise
+        #         RIRs_noise = self.genRIR(acoustic_scene.array_setup, acoustic_scene.room_sz, acoustic_scene.beta, acoustic_scene.T60, acoustic_scene.mic_pos, traj_pts_noise) # (npoint, nch, nsample, nsource）
+        #         late_rev_time = 0/1000
+        #         RIRs_noise[:, :, :int(late_rev_time*self.fs), :] = 0
 
-                RIR_is_ok = self.checkRIR(RIRs_noise)
+        #         RIR_is_ok = self.checkRIR(RIRs_noise)
             
-            # RIR conv noise source
-            nsample_desired = int(self.T * self.fs)
-            noise_signal = np.zeros((nsample_desired, self.nmic))
-            idxes = random.sample([i for i in range(len(source_dataset))], num_source)
-            for source_idx in range(num_source):
-                idx = idxes[source_idx]
-                sou_sig = source_dataset[idx][:, 0]
-                noi_sig = sou_conv_rir(sou_sig=sou_sig, rir=RIRs_noise[0, :, :, source_idx].transpose(1, 0))
-                noi_pow = np.mean(np.sum(noi_sig ** 2, axis=0))
-                noise_signal += noi_sig / (noi_pow + eps)
+        #     # RIR conv noise source
+        #     nsample_desired = int(self.T * self.fs)
+        #     noise_signal = np.zeros((nsample_desired, self.nmic))
+        #     idxes = random.sample([i for i in range(len(source_dataset))], num_source)
+        #     for source_idx in range(num_source):
+        #         idx = idxes[source_idx]
+        #         sou_sig = source_dataset[idx][:, 0]
+        #         noi_sig = sou_conv_rir(sou_sig=sou_sig, rir=RIRs_noise[0, :, :, source_idx].transpose(1, 0))
+        #         noi_pow = np.mean(np.sum(noi_sig ** 2, axis=0))
+        #         noise_signal += noi_sig / (noi_pow + eps)
 
-            # plot generated spatial coherence
-            # nfft = 25
-            # w_rad = 2*math.pi*self.fs*np.array([i for i in range(nfft//2+1)])/nfft
-            # DC = self.gen_desired_spatial_coherence(mic_pos, type_nf='spherical', c=343, w_rad=w_rad)
-            # self.sc_test(DC, noise_signal, mic_idxes=[0, 1], save_name='diffuse_fromRIR')
+        #     # plot generated spatial coherence
+        #     # nfft = 25
+        #     # w_rad = 2*math.pi*self.fs*np.array([i for i in range(nfft//2+1)])/nfft
+        #     # DC = self.gen_desired_spatial_coherence(mic_pos, type_nf='spherical', c=343, w_rad=w_rad)
+        #     # self.sc_test(DC, noise_signal, mic_idxes=[0, 1], save_name='diffuse_fromRIR')
 
-        elif noise_type == 'diffuse_white_fromRIR':
-            num_source = 20
+        # elif noise_type == 'diffuse_white_fromRIR':
+        #     num_source = 20
 
-            RIR_is_ok = False
-            while(RIR_is_ok==False):
-                # Trajectory points for noise
-                traj_pts_noise = self.genTrajectory(acoustic_scene.array_setup, acoustic_scene.room_sz, acoustic_scene.array_pos, acoustic_scene.traj_pts.shape[0], num_source) #  (npoint,3,nsource)
+        #     RIR_is_ok = False
+        #     while(RIR_is_ok==False):
+        #         # Trajectory points for noise
+        #         traj_pts_noise = self.genTrajectory(acoustic_scene.array_setup, acoustic_scene.room_sz, acoustic_scene.array_pos, acoustic_scene.traj_pts.shape[0], num_source) #  (npoint,3,nsource)
 
-                # RIRs for noise
-                RIRs_noise = self.genRIR(acoustic_scene.array_setup, acoustic_scene.room_sz, acoustic_scene.beta, acoustic_scene.T60, acoustic_scene.mic_pos, traj_pts_noise) # (npoint, nch, nsample, nsource）
-                late_rev_time = 0/1000
-                RIRs_noise[:, :, :int(late_rev_time*self.fs), :] = 0
+        #         # RIRs for noise
+        #         RIRs_noise = self.genRIR(acoustic_scene.array_setup, acoustic_scene.room_sz, acoustic_scene.beta, acoustic_scene.T60, acoustic_scene.mic_pos, traj_pts_noise) # (npoint, nch, nsample, nsource）
+        #         late_rev_time = 0/1000
+        #         RIRs_noise[:, :, :int(late_rev_time*self.fs), :] = 0
 
-                RIR_is_ok = self.checkRIR(RIRs_noise)
+        #         RIR_is_ok = self.checkRIR(RIRs_noise)
             
-            # RIR conv noise source
-            nsample_desired = int(self.T * self.fs)
-            noise_signal = np.zeros((nsample_desired, self.nmic))
-            noise_source = np.random.standard_normal((nsample_desired, num_source))
-            for source_idx in range(num_source):
-                sou_sig = noise_source[:, source_idx]
-                noi_sig = sou_conv_rir(sou_sig=sou_sig, rir=RIRs_noise[0, :, :, source_idx].transpose(1, 0))
-                noi_pow = np.mean(np.sum(noi_sig ** 2, axis=0))
-                noise_signal += noi_sig / (noi_pow + eps)
+        #     # RIR conv noise source
+        #     nsample_desired = int(self.T * self.fs)
+        #     noise_signal = np.zeros((nsample_desired, self.nmic))
+        #     noise_source = np.random.standard_normal((nsample_desired, num_source))
+        #     for source_idx in range(num_source):
+        #         sou_sig = noise_source[:, source_idx]
+        #         noi_sig = sou_conv_rir(sou_sig=sou_sig, rir=RIRs_noise[0, :, :, source_idx].transpose(1, 0))
+        #         noi_pow = np.mean(np.sum(noi_sig ** 2, axis=0))
+        #         noise_signal += noi_sig / (noi_pow + eps)
 
         elif noise_type == 'real_world': # The array topology should be consistent
             idx = random.randint(0, len(self.path_set)-1)
@@ -721,36 +707,16 @@ class NoiseDataset(Dataset):
                 raise Exception('Unexpected number of microphone channels')
 
             nsample_desired = int(self.T * fs)
-            noise_copy = copy.deepcopy(noise)
-            nsample = noise.shape[0]
-            while nsample < nsample_desired:
-                noise_copy = np.concatenate((noise_copy, noise), axis=0)
-                nsample = noise_copy.shape[0]
-
-            st = random.randint(0, nsample - nsample_desired)
-            ed = st + nsample_desired
-            noise_copy = noise_copy[st:ed, :]
-
+            noise = pad_cut_sig_sameutt(noise, nsample_desired)
             if fs != self.fs:
                 noise_signal = scipy.signal.resample_poly(noise_copy, up=self.fs, down=fs)
-                noise_signal = noise_signal/(np.max(noise_signal)+eps)
+            noise_signal = noise_signal/(np.max(noise_signal)+eps)
                 
         else:
             nsample_desired = int(self.T * self.fs)
             noise_signal = np.zeros((nsample_desired, self.nmic))
 
         return noise_signal
-
-    def _exploreCorpus(self, path, file_extension):
-        directory_tree = {}
-        directory_path = []
-        for item in os.listdir(path):
-            if os.path.isdir( os.path.join(path, item) ):
-                directory_tree[item], directory_path = self._exploreCorpus( os.path.join(path, item), file_extension )
-            elif item.split(".")[-1] == file_extension:
-                directory_tree[ item.split(".")[0] ] = os.path.join(path, item)
-                directory_path += [os.path.join(path, item)]
-        return directory_tree, directory_path
 
     def gen_Gaussian_noise(self, T, fs, nmic):
 
@@ -796,7 +762,7 @@ class NoiseDataset(Dataset):
                     if type_nf == 'spherical':
                         DC[p, q, :] = np.sinc(w_rad*dist/(c*math.pi))
                     elif type_nf == 'cylindrical':
-                        DC[p, q, :] = scipy.special(0, w_rad*dist/c)
+                        DC[p, q, :] = scipy.special.jn(0, w_rad*dist/c)
                     else:
                         raise Exception('Unknown noise field')
         # Alternative
@@ -804,7 +770,7 @@ class NoiseDataset(Dataset):
         # if type_nf == 'spherical':
         # 	DC = np.sinc(w_rad * dist / (c * math.pi))
         # elif type_nf == 'cylindrical':
-        # 	DC = scipy.special(0, w_rad * dist / c)
+        # 	DC = scipy.special.jn(0, w_rad * dist / c)
         # else:
         # 	raise Exception('Unknown noise field')
 
@@ -871,75 +837,75 @@ class NoiseDataset(Dataset):
         # plt.show()
         plt.savefig(save_name)
 
-    def genTrajectory(self, array_setup, room_sz, array_pos, nb_points, num_source, source_state='static'):
-        src_pos_min = np.array([0.0, 0.0, 0.0])
-        src_pos_max = room_sz * 1
+    # def genTrajectory(self, array_setup, room_sz, array_pos, nb_points, num_source, source_state='static'):
+    #     src_pos_min = np.array([0.0, 0.0, 0.0])
+    #     src_pos_max = room_sz * 1
 
-        traj_pts = np.zeros((nb_points, 3, num_source))
-        for source_idx in range(num_source):
-            if source_state == 'static':
-                src_pos = src_pos_min + np.random.random(3) * (src_pos_max - src_pos_min)
-                traj_pts[:, :, source_idx] = np.ones((nb_points, 1)) * src_pos
+    #     traj_pts = np.zeros((nb_points, 3, num_source))
+    #     for source_idx in range(num_source):
+    #         if source_state == 'static':
+    #             src_pos = src_pos_min + np.random.random(3) * (src_pos_max - src_pos_min)
+    #             traj_pts[:, :, source_idx] = np.ones((nb_points, 1)) * src_pos
 
-            elif source_state == 'mobile':
-                src_pos_ini = src_pos_min + np.random.random(3) * (src_pos_max - src_pos_min)
-                src_pos_end = src_pos_min + np.random.random(3) * (src_pos_max - src_pos_min)
+    #         elif source_state == 'mobile':
+    #             src_pos_ini = src_pos_min + np.random.random(3) * (src_pos_max - src_pos_min)
+    #             src_pos_end = src_pos_min + np.random.random(3) * (src_pos_max - src_pos_min)
 
-                Amax = np.min(np.stack((src_pos_ini - src_pos_min,
-                                        src_pos_max - src_pos_ini,
-                                        src_pos_end - src_pos_min,
-                                        src_pos_max - src_pos_end)),
-                                        axis=0)
+    #             Amax = np.min(np.stack((src_pos_ini - src_pos_min,
+    #                                     src_pos_max - src_pos_ini,
+    #                                     src_pos_end - src_pos_min,
+    #                                     src_pos_max - src_pos_end)),
+    #                                     axis=0)
 
-                A = np.random.random(3) * np.minimum(Amax, 1) # Oscilations with 1m as maximum in each axis
-                w = 2*np.pi / nb_points * np.random.random(3) * 2  # Between 0 and 2 oscilations in each axis
+    #             A = np.random.random(3) * np.minimum(Amax, 1) # Oscilations with 1m as maximum in each axis
+    #             w = 2*np.pi / nb_points * np.random.random(3) * 2  # Between 0 and 2 oscilations in each axis
 
-                traj_pts[:, :, source_idx] = np.array([np.linspace(i,j,nb_points) for i,j in zip(src_pos_ini, src_pos_end)]).transpose()
-                traj_pts[:, :, source_idx] += A * np.sin(w * np.arange(nb_points)[:, np.newaxis])
+    #             traj_pts[:, :, source_idx] = np.array([np.linspace(i,j,nb_points) for i,j in zip(src_pos_ini, src_pos_end)]).transpose()
+    #             traj_pts[:, :, source_idx] += A * np.sin(w * np.arange(nb_points)[:, np.newaxis])
 
-                if np.random.random(1) < 0.25:
-                    traj_pts[:, :, source_idx] = np.ones((nb_points, 1)) * src_pos_ini 
+    #             if np.random.random(1) < 0.25:
+    #                 traj_pts[:, :, source_idx] = np.ones((nb_points, 1)) * src_pos_ini 
 
-        return traj_pts
+    #     return traj_pts
 
-    def genRIR(self, array_setup, room_sz, beta, T60, mic_pos, traj_pts):
-        if T60 == 0:
-            Tdiff = 0.1
-            Tmax = 0.1
-            nb_img = [1,1,1]
+    # def genRIR(self, array_setup, room_sz, beta, T60, mic_pos, traj_pts):
+    #     if T60 == 0:
+    #         Tdiff = 0.1
+    #         Tmax = 0.1
+    #         nb_img = [1,1,1]
 
-        else:
-            Tdiff = gpuRIR.att2t_SabineEstimator(12, T60) # Use ISM until the RIRs decay 12dB
-            Tmax = gpuRIR.att2t_SabineEstimator(40, T60)  # Use diffuse model until the RIRs decay 40dB
-            if T60 < 0.15: Tdiff = Tmax # Avoid issues with too short RIRs
-            nb_img = gpuRIR.t2n(Tdiff, room_sz)
+    #     else:
+    #         Tdiff = gpuRIR.att2t_SabineEstimator(12, T60) # Use ISM until the RIRs decay 12dB
+    #         Tmax = gpuRIR.att2t_SabineEstimator(40, T60)  # Use diffuse model until the RIRs decay 40dB
+    #         if T60 < 0.15: Tdiff = Tmax # Avoid issues with too short RIRs
+    #         nb_img = gpuRIR.t2n(Tdiff, room_sz)
 
-        RIRs_sources = []
-        num_source = traj_pts.shape[-1]
-        for source_idx in range(num_source):
-            RIRs = gpuRIR.simulateRIR(room_sz=room_sz, beta=beta, pos_src=traj_pts[:,:,source_idx], pos_rcv=mic_pos,
-               nb_img=nb_img, Tmax=Tmax, fs=self.fs, Tdiff=Tdiff, orV_rcv=array_setup.mic_orV,
-               mic_pattern=array_setup.mic_pattern, c=self.c)
-            RIRs_sources += [RIRs]
-        RIRs_sources = np.array(RIRs_sources).transpose(1,2,3,0) # (npoints,nch,nsamples,nsources)
+    #     RIRs_sources = []
+    #     num_source = traj_pts.shape[-1]
+    #     for source_idx in range(num_source):
+    #         RIRs = gpuRIR.simulateRIR(room_sz=room_sz, beta=beta, pos_src=traj_pts[:,:,source_idx], pos_rcv=mic_pos,
+    #            nb_img=nb_img, Tmax=Tmax, fs=self.fs, Tdiff=Tdiff, orV_rcv=array_setup.mic_orV,
+    #            mic_pattern=array_setup.mic_pattern, c=self.c)
+    #         RIRs_sources += [RIRs]
+    #     RIRs_sources = np.array(RIRs_sources).transpose(1,2,3,0) # (npoints,nch,nsamples,nsources)
         
-        return RIRs_sources
+    #     return RIRs_sources
     
-    def checkRIR(self, RIRs):
-        ok_flag = True
-        nan_flag = np.isnan(RIRs)
-        inf_flag = np.isinf(RIRs)
-        if (True in nan_flag):
-            warnings.warn('NAN exists in noise RIR~')
-            ok_flag = False
-        if (True in inf_flag):
-            warnings.warn('INF exists in RIR~')
-            ok_flag = False
-        zero_flag = (np.sum(RIRs) == 0)
-        if zero_flag:
-            warnings.warn('Noise RIR is all zeros~')
-            ok_flag = False
-        return ok_flag
+    # def checkRIR(self, RIRs):
+    #     ok_flag = True
+    #     nan_flag = np.isnan(RIRs)
+    #     inf_flag = np.isinf(RIRs)
+    #     if (True in nan_flag):
+    #         warnings.warn('NAN exists in noise RIR~')
+    #         ok_flag = False
+    #     if (True in inf_flag):
+    #         warnings.warn('INF exists in RIR~')
+    #         ok_flag = False
+    #     zero_flag = (np.sum(RIRs) == 0)
+    #     if zero_flag:
+    #         warnings.warn('Noise RIR is all zeros~')
+    #         ok_flag = False
+    #     return ok_flag
 
 #  RIR Datasets
 class RIRDataset(Dataset):
@@ -1267,14 +1233,14 @@ class RandomMicSigDataset_FromRIR(Dataset):
         acoustic_scene.t = t
         acoustic_scene.trajectory = trajectory
 
-        # acoustic_scene.source_vad = vad[:,0:num_source] # a mask
+        # acoustic_scene.source_vad = vad[:,0:num_source].astype(bool) # a mask
         # acoustic_scene.DOA = []
         acoustic_scene.TDOA = []
         acoustic_scene.DRR = []
         acoustic_scene.C50 = []
         # acoustic_scene.C80 = []
         # acoustic_scene.dp_mic_signal = []
-        # acoustic_scene.spakerID = []
+        # acoustic_scene.speakerID = []
 
         return acoustic_scene
 
@@ -1386,112 +1352,161 @@ class RandomMicSigDataset(Dataset):
                     writer.writerow(csv_row)
 
     def genTrajectory(self, room_sz, array_pos, array_setup, min_src_array_dist, min_src_boundary_dist, num_source, traj_pt_mode='time'):
-        src_pos_min = np.array([0.0, 0.0, 0.0]) + np.array([min_src_boundary_dist, min_src_boundary_dist, min_src_boundary_dist])
-        src_pos_max = room_sz - np.array([min_src_boundary_dist, min_src_boundary_dist, min_src_boundary_dist])
-        if array_setup.arrayType == 'planar_linear':   
-            # suited cases: annotation is symetric about end-fire direction (like TDOA, not DOA), front-back confusion not exists, half-plane is set
-            # src can be at any 3D point in half-plane space
-            if np.sum(array_setup.orV) > 0:
-                src_pos_min[np.nonzero(array_setup.orV)] = array_pos[np.nonzero(array_setup.orV)] 
-                src_pos_min += min_src_array_dist * np.abs(array_setup.orV)
-            else:
-                src_pos_max[np.nonzero(array_setup.orV)] = array_pos[np.nonzero(array_setup.orV)] 
-                src_pos_max -= min_src_array_dist * np.abs(array_setup.orV)
-
-        # if array_setup.arrayType == 'planar_linear':   
-        #     # suited cases: annotation is symetric about end-fire direction (like DOA, not TDOA), front-back confusion exists, half-plane is set
-        #     # src can be at any planar point in half-plane space
-        #     assert (array_setup.orV==[0,1,0]) | (array_setup.orV==[0,-1,0]) | (array_setup.orV==[1,0,0]) | (array_setup.orV==[-1,0,0]), 'array orientation must along x or y axis'
-        #     if array_setup.orV[0] == 1:
-        #         src_pos_min[0] = array_pos[0] + min_src_array_dist 
-        #     elif array_setup.orV[0] == -1:
-        #         src_pos_max[0] = array_pos[0] - min_src_array_dist 
-        #     elif array_setup.orV[1] == 1:
-        #         src_pos_min[1] = array_pos[1] + min_src_array_dist 
-        #     elif array_setup.orV[1] == -1:
-        #         src_pos_max[1] = array_pos[1] - min_src_array_dist 
-        #     src_pos_min[2] = array_pos[2] - 0.0
-        #     src_pos_max[2] = array_pos[2] + 0.0
-
-        # elif array_setup.arrayType == 'planar': 
-        #     # suited cases: annotation is not symetric about end-fire direction (like DOA), front-back confusion not exists, all plane is set
-        #     # src can be at any planar point in the all-plane space
-        #     assert array_setup.mic_rotate == 0, 'array rotate must be 0'
-        #     direction_candidates = ['x', 'y', '-x', '-y']
-        #     direction = random.sample(direction_candidates, 1)[0]
-        #     if direction == 'x':
-        #         src_pos_min[0] = array_pos[0] + min_src_array_dist 
-        #     elif direction == '-x':
-        #         src_pos_max[0] = array_pos[0] - min_src_array_dist 
-        #     elif direction == 'y':
-        #         src_pos_min[1] = array_pos[1] + min_src_array_dist 
-        #     elif direction == '-y':
-        #         src_pos_max[1] = array_pos[1] - min_src_array_dist 
-        #     else:
-        #         raise Exception('Unrecognized direction~')
-        #     src_pos_min[2] = array_pos[2] - 0.0
-        #     src_pos_max[2] = array_pos[2] + 0.0
-        #     # src_pos = np.concatenate((src_pos_min[np.newaxis, :], src_pos_max[np.newaxis, :]), axis=0)
-            
-        # elif array_setup.arrayType == '3D': 
-        #     # suited cases: annotation is not symetric about end-fire direction (like DOA), front-back confusion not exists, all plane is set
-        #     # src can be at some 3D point in the all-plane space
-        #     assert array_setup.rotate == 0, 'array rotate must be 0'
-        #     direction_candidates = ['x', 'y', '-x', '-y']
-        #     direction = random.sample(direction_candidates, 1)[0]
-        #     if direction == 'x':
-        #         src_pos_min[0] = array_pos[0] + min_src_array_dist 
-        #     elif direction == '-x':
-        #         src_pos_max[0] = array_pos[0] - min_src_array_dist 
-        #     elif direction == 'y':
-        #         src_pos_min[1] = array_pos[1] + min_src_array_dist 
-        #     elif direction == '-y':
-        #         src_pos_max[1] = array_pos[1] - min_src_array_dist 
-        #     else:
-        #         raise Exception('Unrecognized direction~')
-        #     src_array_relative_height = 0.3
-        #     src_pos_min[2] = array_pos[2] - src_array_relative_height
-        #     src_pos_max[2] = array_pos[2] + src_array_relative_height
-        
-        else:
-            raise Exception('Undefined array type~')
-
-        for i in range(3):
-            assert src_pos_min[i]<=src_pos_max[i], 'Src postion range error: '+str(src_pos_min[i])+ '>' + str(src_pos_max[i]) + '(array boundary dist >= src boundary dist + src array dist)'
-
-
-        traj_pts = np.zeros((self.nb_points, 3, num_source))
+        traj_pts = [] # (self.nb_points, 3, num_source)
         for source_idx in range(num_source):
+            src_pos_min = np.array([0.0, 0.0, 0.0]) + np.array([min_src_boundary_dist, min_src_boundary_dist, min_src_boundary_dist])
+            src_pos_max = room_sz - np.array([min_src_boundary_dist, min_src_boundary_dist, min_src_boundary_dist])
+            if array_setup.arrayType == 'planar_linear':   
+                # suited cases: annotation is symetric about end-fire direction (like TDOA, not DOA), front-back confusion not exists, half-plane is set
+                # src can be at any 3D point in half-plane space
+                if np.sum(array_setup.orV) > 0:
+                    src_pos_min[np.nonzero(array_setup.orV)] = array_pos[np.nonzero(array_setup.orV)] 
+                    src_pos_min += min_src_array_dist * np.abs(array_setup.orV)
+                else:
+                    src_pos_max[np.nonzero(array_setup.orV)] = array_pos[np.nonzero(array_setup.orV)] 
+                    src_pos_max -= min_src_array_dist * np.abs(array_setup.orV)
+
+            # if array_setup.arrayType == 'planar_linear':   
+            #     # suited cases: annotation is symetric about end-fire direction (like DOA, not TDOA), front-back confusion exists, half-plane is set
+            #     # src can be at any planar point in half-plane space
+            #     orv_list = list(array_setup.orV)
+            #     assert (orv_list==[0,1,0]) | (orv_list==[0,-1,0]) | (orv_list==[1,0,0]) | (orv_list==[-1,0,0]), 'array orientation must along x or y axis'
+            #     if array_setup.orV[0] == 1:
+            #         src_pos_min[0] = np.maximum(array_pos[0] + min_src_array_dist, src_pos_min[0])
+            #     elif array_setup.orV[0] == -1:
+            #         src_pos_max[0] = np.minimum(array_pos[0] - min_src_array_dist, src_pos_max[0])
+            #     elif array_setup.orV[1] == 1:
+            #         src_pos_min[1] = np.maximum(array_pos[1] + min_src_array_dist, src_pos_min[1])
+            #     elif array_setup.orV[1] == -1:
+            #         src_pos_max[1] = np.minimum(array_pos[1] - min_src_array_dist, src_pos_max[1])
+            #     src_pos_min[2] = np.maximum(array_pos[2] - 0.0, src_pos_min[2])
+            #     src_pos_max[2] = np.minimum(array_pos[2] + 0.0, src_pos_max[2])
+ 
+            # elif array_setup.arrayType == 'planar': 
+            #     # suited cases: annotation is not symetric about end-fire direction (like DOA), front-back confusion not exists, all plane is set
+            #     # src can be at any planar point in the all-plane space
+            #     assert array_setup.mic_rotate == 0, 'array rotate must be 0'
+            #     direction_candidates = ['x', 'y', '-x', '-y']
+            #     direction = random.sample(direction_candidates, 1)[0]
+            #     if direction == 'x':
+            #         src_pos_min[0] = array_pos[0] + min_src_array_dist 
+            #     elif direction == '-x':
+            #         src_pos_max[0] = array_pos[0] - min_src_array_dist 
+            #     elif direction == 'y':
+            #         src_pos_min[1] = array_pos[1] + min_src_array_dist 
+            #     elif direction == '-y':
+            #         src_pos_max[1] = array_pos[1] - min_src_array_dist 
+            #     else:
+            #         raise Exception('Unrecognized direction~')
+            #     src_pos_min[2] = array_pos[2] - 0.0
+            #     src_pos_max[2] = array_pos[2] + 0.0
+            #     # src_pos = np.concatenate((src_pos_min[np.newaxis, :], src_pos_max[np.newaxis, :]), axis=0)
+                
+            #     # directions = {}
+            #     # for direction in direction_candidates:
+            #     #     directions[direction] = [src_pos_min, src_pos_max]
+            #     #     if direction == 'x':
+            #     #         directions[direction][0][0] = np.maximum(array_pos[0] + min_src_array_dist, src_pos_min[0]) # src_pos_min[0]
+            #     #     elif direction == '-x':
+            #     #         directions[direction][1][0] = np.minimum(array_pos[0] - min_src_array_dist, src_pos_max[0]) # src_pos_max[0]
+            #     #     elif direction == 'y':
+            #     #         directions[direction][0][1] = np.maximum(array_pos[1] + min_src_array_dist, src_pos_min[1]) # src_pos_min[1]
+            #     #     elif direction == '-y':
+            #     #         directions[direction][1][1] = np.minimum(array_pos[1] - min_src_array_dist, src_pos_max[1]) # src_pos_max[1]
+            #     #     else:
+            #     #         raise Exception('Unrecognized direction~')
+            #     # src_pos_min[2] = np.maximum(array_pos[2] - 0.0, src_pos_min[2])
+            #     # src_pos_max[2] = np.minimum(array_pos[2] + 0.0, src_pos_max[2])
+            #     # # src_pos = np.concatenate((src_pos_min[np.newaxis, :], src_pos_max[np.newaxis, :]), axis=0)
+            #     # direction = random.sample(direction_candidates, 1)[0]
+            #     # src_pos_min = copy.deepcopy(directions[direction][0])
+            #     # src_pos_max = copy.deepcopy(directions[direction][1])
+                
+            # elif array_setup.arrayType == '3D': 
+            #     # suited cases: annotation is not symetric about end-fire direction (like DOA), front-back confusion not exists, all plane is set
+            #     # src can be at some 3D point in the all-plane space
+            #     assert array_setup.mic_rotate == 0, 'array rotate must be 0'
+            #     direction_candidates = ['x', 'y', '-x', '-y']
+            #     direction = random.sample(direction_candidates, 1)[0]
+            #     if direction == 'x':
+            #         src_pos_min[0] = np.maximum(array_pos[0] + min_src_array_dist, src_pos_min[0])
+            #     elif direction == '-x':
+            #         src_pos_max[0] = np.minimum(array_pos[0] - min_src_array_dist, src_pos_max[0]) 
+            #     elif direction == 'y':
+            #         src_pos_min[1] = np.maximum(array_pos[1] + min_src_array_dist, src_pos_min[1])
+            #     elif direction == '-y':
+            #         src_pos_max[1] = np.minimum(array_pos[1] - min_src_array_dist, src_pos_max[1])  
+            #     else:
+            #         raise Exception('Unrecognized direction~')
+            #     src_array_relative_height = 0.5
+            #     src_pos_min[2] = np.maximum(array_pos[2] - src_array_relative_height, src_pos_min[2]) 
+            #     src_pos_max[2] = np.minimum(array_pos[2] + src_array_relative_height, src_pos_max[2])
+
+            else:
+                raise Exception('Undefined array type~')
+
+            for i in range(3):
+                assert src_pos_min[i]<=src_pos_max[i], 'Src postion range error: '+str(src_pos_min[i])+ '>' + str(src_pos_max[i]) + '(array boundary dist >= src boundary dist + src array dist)'
+            
             if self.source_state == 'static':
                 src_pos = src_pos_min + np.random.random(3) * (src_pos_max - src_pos_min)
-                traj_pts[:, :, source_idx] = np.ones((self.nb_points, 1)) * src_pos
+                traj_pts_eachsource = np.ones((self.nb_points, 1)) * src_pos
+
+            # elif self.source_state == 'mobile_longduration': # 3D sinusoidal trjactories
+            #     T_eachTrajPart_range = [4, 6] # in seconds
+            #     # when room_size_range = [[3, 3, 2.5], [10, 8, 6]], array_pos_ratio_range = [[0.3, 0.3, 0.2], [0.7, 0.7, 0.5]], 
+            #     # min_src_array_dist = 0.5, min_src_boundary_dist = 0.3, 
+            #     # the maximumum spk speed is 1ms/s-2.5m/s for Teach=4, 0.8m/s-2m/s for Teach=5, 0.67-1.6m/s for Teach=6
+            #     desired_T_interval = 0.1 # consistent with run.py
+            #     traj_pts_eachsource = np.zeros((1, 3))
+            #     traj_pts_eachsource[0, :] = src_pos_min + np.random.random(3) * (src_pos_max - src_pos_min)
+            #     nb_points_total = traj_pts_eachsource.shape[0]
+            #     while (nb_points_total < self.nb_points):
+            #         T_eachTrajPart = np.random.uniform(T_eachTrajPart_range[0], T_eachTrajPart_range[1])
+            #         nb_points = int(T_eachTrajPart / desired_T_interval)
+            #         src_pos_ini = copy.deepcopy(traj_pts_eachsource[-1, :])
+            #         src_pos_end = src_pos_min + np.random.random(3) * (src_pos_max - src_pos_min)
+
+            #         Amax = np.min(np.stack((src_pos_ini - src_pos_min, src_pos_max - src_pos_ini,
+            #                                 src_pos_end - src_pos_min, src_pos_max - src_pos_end)), axis=0)
+            #         A = np.random.random(3) * np.minimum(Amax, 1)    # Oscilations with 1m as maximum in each axis
+            #         if traj_pt_mode == 'time': # Specify nb_points according to time 
+            #             w = 2*np.pi / nb_points * np.random.random(3) * 2  # Between 0 and 2 oscilations in each axis
+            #             line_pts = np.array([np.linspace(i,j,nb_points) for i,j in zip(src_pos_ini, src_pos_end)]).transpose()
+            #             osc_pts = A * np.sin(w * np.arange(nb_points)[:, np.newaxis])
+            #             traj_pts_eachsource = np.concatenate((traj_pts_eachsource, line_pts + osc_pts), axis=0) # (nbpoints, 3) 
+            #             nb_points_total = traj_pts_eachsource.shape[0]
+            #         # print(src_pos_ini, src_pos_end, line_pts[0,:] + osc_pts[0,:],line_pts[-1,:] + osc_pts[-1,:]) 
+
+            #     traj_pts_eachsource = traj_pts_eachsource[0:self.nb_points, :]
 
             elif self.source_state == 'mobile': # 3D sinusoidal trjactories
                 src_pos_ini = src_pos_min + np.random.random(3) * (src_pos_max - src_pos_min)
                 src_pos_end = src_pos_min + np.random.random(3) * (src_pos_max - src_pos_min)
-                
+
                 Amax = np.min(np.stack((src_pos_ini - src_pos_min, src_pos_max - src_pos_ini,
                                         src_pos_end - src_pos_min, src_pos_max - src_pos_end)), axis=0)
                 A = np.random.random(3) * np.minimum(Amax, 1)    # Oscilations with 1m as maximum in each axis
                 if traj_pt_mode == 'time': # Specify nb_points according to time 
                     w = 2*np.pi / self.nb_points * np.random.random(3) * 2  # Between 0 and 2 oscilations in each axis
-                    traj_pts[:,:,source_idx] = np.array([np.linspace(i,j,self.nb_points) for i,j in zip(src_pos_ini, src_pos_end)]).transpose()
-                    traj_pts[:,:,source_idx] += A * np.sin(w * np.arange(self.nb_points)[:, np.newaxis])
+                    line_pts = np.array([np.linspace(i,j,self.nb_points) for i,j in zip(src_pos_ini, src_pos_end)]).transpose()
+                    osc_pts = A * np.sin(w * np.arange(self.nb_points)[:, np.newaxis])
+                    traj_pts_eachsource = line_pts + osc_pts # (nbpoints, 3)
                 
                 elif traj_pt_mode == 'distance_line': # Specify nb_points according to line distance (pointing src_pos_end from src_pos_ini) 
-                    assert num_source == 1, 'number of source larger than one is not supported at this mode'
-                    nb_points = int(np.sqrt(np.sum(src_pos_end-src_pos_ini)**2)//0.1 + 1) # adaptive number of points, namely one point per liner 10cm
+                    desired_dist = 0.1 # between ajacent points
+                    nb_points = int(np.sqrt(np.sum(src_pos_end-src_pos_ini)**2)//desired_dist + 1) # adaptive number of points, namely one point per liner 10cm
                     w = 2*np.pi / nb_points * np.random.random(3) * 2  # Between 0 and 2 oscilations in each axis
-                    traj_pts = np.array([np.linspace(i,j,nb_points) for i,j in zip(src_pos_ini, src_pos_end)]).transpose()
-                    traj_pts += A * np.sin(w * np.arange(nb_points)[:, np.newaxis])
+                    line_pts = np.array([np.linspace(i,j,nb_points) for i,j in zip(src_pos_ini, src_pos_end)]).transpose()
+                    osc_pts = A * np.sin(w * np.arange(nb_points)[:, np.newaxis])
+                    traj_pts_eachsource = line_pts + osc_pts
                 
                 elif traj_pt_mode == 'distance_sin': # Specify nb_points according to direct sin distance
                     desired_dist = 0.1 # between ajacent points
                     src_ini_end_dist = np.sqrt(np.sum(src_pos_end-src_pos_ini)**2)
                     src_ini_end_dirc_vec = (src_pos_end - src_pos_ini)/src_ini_end_dist
                     w = 2*np.pi / src_ini_end_dist * np.random.random(3) * 2  # Between 0 and 2 oscilations in each axis
-                    assert num_source == 1, 'number of source larger than one is not supported at this mode'
-                    traj_pts = []
+                    traj_pts_eachsource = []
                     line_pts = []
                     current_dist_along_dirc_vec = 0
                     while current_dist_along_dirc_vec < src_ini_end_dist:
@@ -1499,7 +1514,7 @@ class RandomMicSigDataset(Dataset):
                         osc = A * np.sin(w * current_dist_along_dirc_vec)
                         line = src_pos_ini + src_ini_end_dirc_vec * current_dist_along_dirc_vec
                         pos0 = line + osc
-                        traj_pts.append(pos0) 
+                        traj_pts_eachsource.append(pos0) 
                         line_pts.append(line)
 
                         # find next point
@@ -1509,15 +1524,12 @@ class RandomMicSigDataset(Dataset):
                             if res.fun < desired_dist / 100:
                                 break
                         current_dist_along_dirc_vec = current_dist_along_dirc_vec + res.x[0]
-                    traj_pts = np.array(traj_pts)
+                    traj_pts_eachsource = np.array(traj_pts_eachsource)
                     line_pts = np.array(line_pts)
-
-                # if np.random.random(1) < 0.25:
-                #     traj_pts[:,:,source_idx] = np.ones((self.nb_points,1)) * src_pos_ini
-                # traj_pts[:,2,source_idx] = array_pos[2] # if sources and array are in the same horizontal plane
-                    
-            # self.plotScene(room_sz=room_sz, traj_pts=traj_pts , mic_pos=array_setup.mic_pos, view='XY', save_path='./')
-
+                
+            traj_pts += [traj_pts_eachsource]
+        traj_pts = np.array(traj_pts).transpose(1, 2, 0)
+            
         if traj_pt_mode != 'distance_sin':
             return traj_pts 
         else:
@@ -1666,7 +1678,7 @@ class RandomMicSigDataset(Dataset):
                 array_setup = array_setup,
                 mic_pos = mic_pos,
                 array_pos = array_pos,
-                traj_pts = traj_pts,
+                traj_pts = traj_pts.astype(np.float32),
                 fs = self.fs,
                 RIR = RIR,
                 c = self.c
@@ -1682,7 +1694,7 @@ class RandomMicSigDataset(Dataset):
                 array_setup = array_setup,
                 mic_pos = mic_pos,
                 array_pos = array_pos,
-                traj_pts = traj_pts,
+                traj_pts = traj_pts.astype(np.float32),
                 fs = self.fs,
                 RIR = RIR,
                 c = self.c
@@ -1716,15 +1728,15 @@ class RandomMicSigDataset(Dataset):
                 source_signal = source_signal,
                 noise_signal = noise_signal,
                 SNR = SNR,
-                timestamps = timestamps,
-                t = t,
-                trajectory = trajectory,
+                timestamps = timestamps.astype(np.float32),
+                t = t.astype(np.float32),
+                trajectory = trajectory.astype(np.float32),
                 c = self.c
                 )
             acoustic_scene.T60_specify = T60_specify
             acoustic_scene.T60_sabine = T60_sabine
 
-            # acoustic_scene.source_vad = vad[:,0:num_source] # use webrtcvad
+            # acoustic_scene.source_vad = vad[:,0:num_source].astype(bool) # use webrtcvad
             # acoustic_scene.mic_vad = [] # use snr
             # acoustic_scene.DOA = []
             acoustic_scene.TDOA = []
@@ -1732,7 +1744,7 @@ class RandomMicSigDataset(Dataset):
             acoustic_scene.C50 = []
             # acoustic_scene.C80 = []
             # acoustic_scene.dp_mic_signal = []
-            # acoustic_scene.spakerID = []
+            # acoustic_scene.speakerID = []
         else:
             raise Exception('Unrecognized data generation mode')
 
@@ -1829,7 +1841,7 @@ class RandomMicSigDatasetOri(Dataset):
                 return mic_signals, gts
 
     def genTrajectory(self, room_sz, array_pos, array_setup, min_src_array_dist, min_src_boundary_dist, num_source, traj_pt_mode='time'):
-        traj_pts = np.zeros((self.nb_points, 3, num_source))
+        traj_pts = [] # (self.nb_points, 3, num_source)
         for source_idx in range(num_source):
             src_pos_min = np.array([0.0, 0.0, 0.0]) + np.array([min_src_boundary_dist, min_src_boundary_dist, min_src_boundary_dist])
             src_pos_max = room_sz - np.array([min_src_boundary_dist, min_src_boundary_dist, min_src_boundary_dist])
@@ -1865,18 +1877,38 @@ class RandomMicSigDatasetOri(Dataset):
             #     direction_candidates = ['x', 'y', '-x', '-y']
             #     direction = random.sample(direction_candidates, 1)[0]
             #     if direction == 'x':
-            #         src_pos_min[0] = np.maximum(array_pos[0] + min_src_array_dist, src_pos_min[0])
+            #         src_pos_min[0] = array_pos[0] + min_src_array_dist 
             #     elif direction == '-x':
-            #         src_pos_max[0] = np.minimum(array_pos[0] - min_src_array_dist, src_pos_max[0])
+            #         src_pos_max[0] = array_pos[0] - min_src_array_dist 
             #     elif direction == 'y':
-            #         src_pos_min[1] = np.maximum(array_pos[1] + min_src_array_dist, src_pos_min[1])
+            #         src_pos_min[1] = array_pos[1] + min_src_array_dist 
             #     elif direction == '-y':
-            #         src_pos_max[1] = np.minimum(array_pos[1] - min_src_array_dist, src_pos_max[1]) 
+            #         src_pos_max[1] = array_pos[1] - min_src_array_dist 
             #     else:
             #         raise Exception('Unrecognized direction~')
-            #     src_pos_min[2] = np.maximum(array_pos[2] - 0.0, src_pos_min[2])
-            #     src_pos_max[2] = np.minimum(array_pos[2] + 0.0, src_pos_max[2])
+            #     src_pos_min[2] = array_pos[2] - 0.0
+            #     src_pos_max[2] = array_pos[2] + 0.0
             #     # src_pos = np.concatenate((src_pos_min[np.newaxis, :], src_pos_max[np.newaxis, :]), axis=0)
+                
+            #     # directions = {}
+            #     # for direction in direction_candidates:
+            #     #     directions[direction] = [src_pos_min, src_pos_max]
+            #     #     if direction == 'x':
+            #     #         directions[direction][0][0] = np.maximum(array_pos[0] + min_src_array_dist, src_pos_min[0]) # src_pos_min[0]
+            #     #     elif direction == '-x':
+            #     #         directions[direction][1][0] = np.minimum(array_pos[0] - min_src_array_dist, src_pos_max[0]) # src_pos_max[0]
+            #     #     elif direction == 'y':
+            #     #         directions[direction][0][1] = np.maximum(array_pos[1] + min_src_array_dist, src_pos_min[1]) # src_pos_min[1]
+            #     #     elif direction == '-y':
+            #     #         directions[direction][1][1] = np.minimum(array_pos[1] - min_src_array_dist, src_pos_max[1]) # src_pos_max[1]
+            #     #     else:
+            #     #         raise Exception('Unrecognized direction~')
+            #     # src_pos_min[2] = np.maximum(array_pos[2] - 0.0, src_pos_min[2])
+            #     # src_pos_max[2] = np.minimum(array_pos[2] + 0.0, src_pos_max[2])
+            #     # # src_pos = np.concatenate((src_pos_min[np.newaxis, :], src_pos_max[np.newaxis, :]), axis=0)
+            #     # direction = random.sample(direction_candidates, 1)[0]
+            #     # src_pos_min = copy.deepcopy(directions[direction][0])
+            #     # src_pos_max = copy.deepcopy(directions[direction][1])
                 
             # elif array_setup.arrayType == '3D': 
             #     # suited cases: annotation is not symetric about end-fire direction (like DOA), front-back confusion not exists, all plane is set
@@ -1903,38 +1935,66 @@ class RandomMicSigDatasetOri(Dataset):
 
             for i in range(3):
                 assert src_pos_min[i]<=src_pos_max[i], 'Src postion range error: '+str(src_pos_min[i])+ '>' + str(src_pos_max[i]) + '(array boundary dist >= src boundary dist + src array dist)'
-                
+            
             if self.source_state == 'static':
                 src_pos = src_pos_min + np.random.random(3) * (src_pos_max - src_pos_min)
-                traj_pts[:, :, source_idx] = np.ones((self.nb_points, 1)) * src_pos
+                traj_pts_eachsource = np.ones((self.nb_points, 1)) * src_pos
+
+            # elif self.source_state == 'mobile_longduration': # 3D sinusoidal trjactories
+            #     T_eachTrajPart_range = [4, 6] # in seconds
+            #     # when room_size_range = [[3, 3, 2.5], [10, 8, 6]], array_pos_ratio_range = [[0.3, 0.3, 0.2], [0.7, 0.7, 0.5]], 
+            #     # min_src_array_dist = 0.5, min_src_boundary_dist = 0.3, 
+            #     # the maximumum spk speed is 1ms/s-2.5m/s for Teach=4, 0.8m/s-2m/s for Teach=5, 0.67-1.6m/s for Teach=6
+            #     desired_T_interval = 0.1 # consistent with run.py
+            #     traj_pts_eachsource = np.zeros((1, 3))
+            #     traj_pts_eachsource[0, :] = src_pos_min + np.random.random(3) * (src_pos_max - src_pos_min)
+            #     nb_points_total = traj_pts_eachsource.shape[0]
+            #     while (nb_points_total < self.nb_points):
+            #         T_eachTrajPart = np.random.uniform(T_eachTrajPart_range[0], T_eachTrajPart_range[1])
+            #         nb_points = int(T_eachTrajPart / desired_T_interval)
+            #         src_pos_ini = copy.deepcopy(traj_pts_eachsource[-1, :])
+            #         src_pos_end = src_pos_min + np.random.random(3) * (src_pos_max - src_pos_min)
+
+            #         Amax = np.min(np.stack((src_pos_ini - src_pos_min, src_pos_max - src_pos_ini,
+            #                                 src_pos_end - src_pos_min, src_pos_max - src_pos_end)), axis=0)
+            #         A = np.random.random(3) * np.minimum(Amax, 1)    # Oscilations with 1m as maximum in each axis
+            #         if traj_pt_mode == 'time': # Specify nb_points according to time 
+            #             w = 2*np.pi / nb_points * np.random.random(3) * 2  # Between 0 and 2 oscilations in each axis
+            #             line_pts = np.array([np.linspace(i,j,nb_points) for i,j in zip(src_pos_ini, src_pos_end)]).transpose()
+            #             osc_pts = A * np.sin(w * np.arange(nb_points)[:, np.newaxis])
+            #             traj_pts_eachsource = np.concatenate((traj_pts_eachsource, line_pts + osc_pts), axis=0) # (nbpoints, 3) 
+            #             nb_points_total = traj_pts_eachsource.shape[0]
+            #         # print(src_pos_ini, src_pos_end, line_pts[0,:] + osc_pts[0,:],line_pts[-1,:] + osc_pts[-1,:]) 
+
+            #     traj_pts_eachsource = traj_pts_eachsource[0:self.nb_points, :]
 
             elif self.source_state == 'mobile': # 3D sinusoidal trjactories
                 src_pos_ini = src_pos_min + np.random.random(3) * (src_pos_max - src_pos_min)
                 src_pos_end = src_pos_min + np.random.random(3) * (src_pos_max - src_pos_min)
-                # self.nb_points = np.sqrt(np.sum(src_pos_end-src_pos_ini)**2)//0.01 + 1 # adaptive number of points, namely one point per liner 10cm
 
                 Amax = np.min(np.stack((src_pos_ini - src_pos_min, src_pos_max - src_pos_ini,
                                         src_pos_end - src_pos_min, src_pos_max - src_pos_end)), axis=0)
                 A = np.random.random(3) * np.minimum(Amax, 1)    # Oscilations with 1m as maximum in each axis
                 if traj_pt_mode == 'time': # Specify nb_points according to time 
                     w = 2*np.pi / self.nb_points * np.random.random(3) * 2  # Between 0 and 2 oscilations in each axis
-                    traj_pts[:,:,source_idx] = np.array([np.linspace(i,j,self.nb_points) for i,j in zip(src_pos_ini, src_pos_end)]).transpose()
-                    traj_pts[:,:,source_idx] += A * np.sin(w * np.arange(self.nb_points)[:, np.newaxis])
+                    line_pts = np.array([np.linspace(i,j,self.nb_points) for i,j in zip(src_pos_ini, src_pos_end)]).transpose()
+                    osc_pts = A * np.sin(w * np.arange(self.nb_points)[:, np.newaxis])
+                    traj_pts_eachsource = line_pts + osc_pts # (nbpoints, 3)
                 
                 elif traj_pt_mode == 'distance_line': # Specify nb_points according to line distance (pointing src_pos_end from src_pos_ini) 
-                    assert num_source == 1, 'number of source larger than one is not supported at this mode'
-                    nb_points = int(np.sqrt(np.sum(src_pos_end-src_pos_ini)**2)//0.1 + 1) # adaptive number of points, namely one point per liner 10cm
+                    desired_dist = 0.1 # between ajacent points
+                    nb_points = int(np.sqrt(np.sum(src_pos_end-src_pos_ini)**2)//desired_dist + 1) # adaptive number of points, namely one point per liner 10cm
                     w = 2*np.pi / nb_points * np.random.random(3) * 2  # Between 0 and 2 oscilations in each axis
-                    traj_pts = np.array([np.linspace(i,j,nb_points) for i,j in zip(src_pos_ini, src_pos_end)]).transpose()
-                    traj_pts += A * np.sin(w * np.arange(nb_points)[:, np.newaxis])
+                    line_pts = np.array([np.linspace(i,j,nb_points) for i,j in zip(src_pos_ini, src_pos_end)]).transpose()
+                    osc_pts = A * np.sin(w * np.arange(nb_points)[:, np.newaxis])
+                    traj_pts_eachsource = line_pts + osc_pts
                 
                 elif traj_pt_mode == 'distance_sin': # Specify nb_points according to direct sin distance
                     desired_dist = 0.1 # between ajacent points
                     src_ini_end_dist = np.sqrt(np.sum(src_pos_end-src_pos_ini)**2)
                     src_ini_end_dirc_vec = (src_pos_end - src_pos_ini)/src_ini_end_dist
                     w = 2*np.pi / src_ini_end_dist * np.random.random(3) * 2  # Between 0 and 2 oscilations in each axis
-                    assert num_source == 1, 'number of source larger than one is not supported at this mode'
-                    traj_pts = []
+                    traj_pts_eachsource = []
                     line_pts = []
                     current_dist_along_dirc_vec = 0
                     while current_dist_along_dirc_vec < src_ini_end_dist:
@@ -1942,7 +2002,7 @@ class RandomMicSigDatasetOri(Dataset):
                         osc = A * np.sin(w * current_dist_along_dirc_vec)
                         line = src_pos_ini + src_ini_end_dirc_vec * current_dist_along_dirc_vec
                         pos0 = line + osc
-                        traj_pts.append(pos0) 
+                        traj_pts_eachsource.append(pos0) 
                         line_pts.append(line)
 
                         # find next point
@@ -1952,12 +2012,11 @@ class RandomMicSigDatasetOri(Dataset):
                             if res.fun < desired_dist / 100:
                                 break
                         current_dist_along_dirc_vec = current_dist_along_dirc_vec + res.x[0]
-                    traj_pts = np.array(traj_pts)
+                    traj_pts_eachsource = np.array(traj_pts_eachsource)
                     line_pts = np.array(line_pts)
-
-                # if np.random.random(1) < 0.25:
-                #     traj_pts[:,:,source_idx] = np.ones((self.nb_points,1)) * src_pos_ini
-                # traj_pts[:,2,source_idx] = array_pos[2] # if sources and array are in the same horizontal plane
+                
+            traj_pts += [traj_pts_eachsource]
+        traj_pts = np.array(traj_pts).transpose(1, 2, 0)
             
         if traj_pt_mode != 'distance_sin':
             return traj_pts 
@@ -2102,7 +2161,7 @@ class RandomMicSigDatasetOri(Dataset):
                 array_setup = array_setup,
                 mic_pos = mic_pos,
                 array_pos = array_pos,
-                traj_pts = traj_pts,
+                traj_pts = traj_pts.astype(np.float32),
                 fs = self.fs,
                 RIR = RIR,
                 c = self.c
@@ -2118,7 +2177,7 @@ class RandomMicSigDatasetOri(Dataset):
                 array_setup = array_setup,
                 mic_pos = mic_pos,
                 array_pos = array_pos,
-                traj_pts = traj_pts,
+                traj_pts = traj_pts.astype(np.float32),
                 fs = self.fs,
                 RIR = RIR,
                 c = self.c
@@ -2146,21 +2205,21 @@ class RandomMicSigDatasetOri(Dataset):
                 array_setup = array_setup,
                 mic_pos = mic_pos,
                 array_pos = array_pos,
-                traj_pts = traj_pts,
+                traj_pts = traj_pts.astype(np.float32),
                 fs = self.fs,
                 RIR = RIR,
                 source_signal = source_signal,
                 noise_signal = noise_signal,
                 SNR = SNR,
-                timestamps = timestamps,
-                t = t,
-                trajectory = trajectory,
+                timestamps = timestamps.astype(np.float32),
+                t = t.astype(np.float32),
+                trajectory = trajectory.astype(np.float32),
                 c = self.c
                 )
             acoustic_scene.T60_specify = T60_specify
             acoustic_scene.T60_sabine = T60_sabine
 
-            # acoustic_scene.source_vad = vad[:,0:num_source] # use webrtcvad
+            # acoustic_scene.source_vad = vad[:,0:num_source].astype(bool) # use webrtcvad
             # acoustic_scene.mic_vad = [] # use snr
             # acoustic_scene.DOA = []
             acoustic_scene.TDOA = []
@@ -2168,7 +2227,7 @@ class RandomMicSigDatasetOri(Dataset):
             acoustic_scene.C50 = []
             # acoustic_scene.C80 = []
             # acoustic_scene.dp_mic_signal = [] # align
-            # acoustic_scene.spakerID = []
+            # acoustic_scene.speakerID = []
         else:
             raise Exception('Unrecognized data generation mode')
 

@@ -23,12 +23,13 @@ os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_id)
 import tqdm
 import copy
 from data_generation_opt import opt
-from common.utils import set_seed, save_file, load_file
+from common.utils import set_seed, save_file, load_file 
 from dataset import Parameter, AcousticScene, ArraySetup
 import dataset as at_dataset 
 
 opts = opt(args.wnoise)
 room_setting = opts.room_setting
+micsig_setting = opts.micsig_setting
 dirs = opts.dir()
 
 room_num_list = {   'pretrain': 100, 
@@ -67,9 +68,9 @@ if __name__ == '__main__':
         else:
             raise Exception('Stage unrecognized!')
 
-        speed = 343.0
-        fs = 16000
-        T = 4.112  # Trajectory length (s) 
+        # Microphone signal
+        fs = micsig_setting['fs']
+        T = micsig_setting['T']
         if args.source_state == 'static':
             traj_points = 1 # number of RIRs per trajectory
         elif args.source_state == 'mobile':
@@ -100,7 +101,7 @@ if __name__ == '__main__':
             nmic = array_setup.mic_pos.shape[0],
             noise_type = Parameter(room_setting['noise_type'], discrete=True),
             noise_path = dirs['noisig_'+args.stage],
-            c = speed)
+            c = room_setting['sound_speed'])
 
         # Room acoustics
         return_data = ['sig', 'scene']
@@ -120,7 +121,7 @@ if __name__ == '__main__':
             nb_points=traj_points,
             room_num=room_num,
             rir_num_eachroom=num_eachroom,
-            c=speed,
+            c=room_setting['sound_speed'],
             transforms=None,
             return_data=return_data,
         )
@@ -157,6 +158,7 @@ if __name__ == '__main__':
                 sig_path = save_dir + '/Room' + str(room_idx) + '_' + str(rir_idx) + '.wav'
                 acous_path = save_dir + '/Room' + str(room_idx) + '_' + str(rir_idx) + '.npz'
                 save_file(mic_signals, acoustic_scene, sig_path, acous_path)
+                
 
     elif (args.data_op == 'read'):
         class AcousticScene:

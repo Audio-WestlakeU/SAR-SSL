@@ -7,6 +7,7 @@ import scipy.signal
 import numpy as np
 import torch
 import random
+import json
 import pickle
 import soundfile 
 import matplotlib.pyplot as plt
@@ -71,14 +72,14 @@ def get_nparams(model, param_key_list=[]):
     return nparam, nparam_sum
 
 
-def get_flops(model, input_shape):
-    """ Get FLOPS (G/s)
+def get_FLOPs(model, input_shape, duration):
+    """ Get floating point operations (FLOPs) (G/s)
     """ 
     model.cuda()
     x = torch.randn((input_shape)).cuda()
     with FlopCounterMode(model, display=False) as fcm:
         y = model(x)
-        flops_forward_eval = fcm.get_total_flops()/4e9
+        flops_forward_eval = fcm.get_total_flops()/duration/1e9
     for k, v in fcm.get_flop_counts().items():
         ss = f"{k}: {{"
         for kk, vv in v.items():
@@ -137,6 +138,7 @@ def create_learning_rate_schedule(total_steps, base, decay_type, warmup_steps, l
 
     return step_fn
 
+
 def forgetting_norm(input, num_frame_set=None):
     """
         Function: Using the mean value of the near frames to normalization
@@ -157,7 +159,7 @@ def forgetting_norm(input, num_frame_set=None):
     mu = 0
     mu_list = []
     for frame_idx in range(num_frames):
-        if num_frames<=num_frame_set:
+        if frame_idx<=num_frame_set:
             alpha = (frame_idx - 1) / (frame_idx + 1)
         else:
             alpha = (num_frame_set - 1) / (num_frame_set + 1)
@@ -168,6 +170,7 @@ def forgetting_norm(input, num_frame_set=None):
     output = mu.reshape(batch_size, 1, 1, num_frames)
 
     return output
+
 
 def save_file(mic_signal, acoustic_scene, sig_path, acous_path):
     """ Save audio and annotation files
@@ -222,6 +225,27 @@ def load_file(acoustic_scene, sig_path, acous_path, sig_tar_fs=16000):
 	# 	print(key ,value)
 	# 	acoustic_scene.__dict__[key] = value
 
+
+def explore_corpus(path, file_extension):
+        directory_tree = {}
+        path_set = []
+        for item in os.listdir(path):   
+            if os.path.isdir( os.path.join(path, item) ):
+                directory_tree[item], path_set_temp = explore_corpus( os.path.join(path, item), file_extension )
+                path_set += path_set_temp
+            elif item.split(".")[-1] == file_extension:
+                directory_tree[ item.split(".")[0] ] = os.path.join(path, item)
+                path_set += [os.path.join(path, item)]
+        return directory_tree, path_set
+
+
+def save_config_to_file(dicts, path):
+    # dicts：e.g.,  [args.__dict__, dirs.__dict__]
+    #               {'args':args.__dict__, 'dirs':dirs.__dict__}
+    with open(path, "w") as json_file:
+        json.dump(dicts, json_file, indent=4)
+
+
 def cross_validation_datadir(data_dir):
     """ Divid data into train, validation and test sets without overlap (perform cross validation), vaolidation and test set only with one room each
         Args:   data_dir
@@ -252,6 +276,7 @@ def cross_validation_datadir(data_dir):
 
     return dirs
 
+
 def one_validation_datadir_simdata(data_dir, train_room_idx=[20,120], val_room_idx=[10,20], test_room_idx=[0,10]):
     """ Divide data into train, validation and test sets without overlap
         Args:   data_dir
@@ -278,6 +303,7 @@ def one_validation_datadir_simdata(data_dir, train_room_idx=[20,120], val_room_i
     dirs = {'train': train_dir, 'val': val_dir, 'test': test_dir}
 
     return dirs
+
 
 def vis_TSNE(data, label):
     """ Visualize by TSNE

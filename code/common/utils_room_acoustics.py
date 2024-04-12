@@ -5,6 +5,7 @@
 import numpy as np
 import scipy.signal
 import random
+import soundfile
 from scipy import stats
 import matplotlib.pyplot as plt
 
@@ -42,6 +43,49 @@ def sou_conv_rir(sou_sig, rir):
     mic_sig = mic_sig_temp[0:nsample, :]
 
     return mic_sig
+
+
+def pad_cut_sig_sameutt(sig, nsample_desired):
+    """ Pad (by repeating the same utterance) and cut signal to desired length
+        Args:       sig             - signal (nsample, )
+                    nsample_desired - desired sample length
+        Returns:    sig_pad_cut     - padded and cutted signal (nsample_desired,)
+    """ 
+    nsample = sig.shape[0]
+    while nsample < nsample_desired:
+        sig = np.concatenate((sig, sig), axis=0)
+        nsample = sig.shape[0]
+    st = random.randint(0, nsample - nsample_desired)
+    ed = st + nsample_desired
+    sig_pad_cut = sig[st:ed]
+
+    return sig_pad_cut
+
+
+def pad_cut_sig_samespk(utt_path_list, current_utt_idx, nsample_desired, fs_desired):
+    """ Pad (by adding utterance of the same spearker) and cut signal to desired length
+        Args:       utt_path_list             - 
+                    current_utt_idx
+                    nsample_desired - desired sample length
+                    fs_desired
+        Returns:    sig_pad_cut     - padded and cutted signal (nsample_desired,)
+    """ 
+    sig = np.array([])
+    nsample = sig.shape[0]
+    while nsample < nsample_desired:
+        utterance, fs = soundfile.read(utt_path_list[current_utt_idx])
+        if fs != fs_desired:
+            utterance = scipy.signal.resample_poly(utterance, up=fs_desired, down=fs)
+            raise Warning(f'Signal is downsampled from {fs} to {fs_desired}')
+        sig = np.concatenate((sig, utterance), axis=0)
+        nsample = sig.shape[0]
+        current_utt_idx += 1
+        if current_utt_idx >= len(utt_path_list): current_utt_idx=0
+    st = random.randint(0, nsample - nsample_desired)
+    ed = st + nsample_desired
+    sig_pad_cut = sig[st:ed]
+
+    return sig_pad_cut
 
 
 def select_microphones(mic_poss, nmic_selected, mic_dist_range):
