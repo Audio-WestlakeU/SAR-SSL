@@ -93,12 +93,13 @@ class Learner(ABC):
 		pbar = tqdm(enumerate(dataset), total=len(dataset), leave=False) 
 
 		for batch_idx, mic_sig_batch in pbar:
+		# for batch_idx, (mic_sig_batch, gt_batch) in pbar:
 			if epoch is not None: pbar.set_description('Epoch {}'.format(epoch))
 
 			in_batch, = self.data_preprocess(mic_sig_batch, None)
 
 			with torch.cuda.amp.autocast(enabled=self.use_amp):
-				loss_batch, diff_batch, vis_batch = self.model(in_batch)
+				loss_batch, diff_batch, vis_batch = self.model(in_batch) # .contiguous()
 			loss_batch = loss_batch.mean() # for multiple gpus
 			diff_batch = diff_batch.mean()
 
@@ -140,11 +141,19 @@ class Learner(ABC):
 				diff = 0
 
 			for mic_sig_batch in dataset:
+			# for mic_sig_batch, gt_batch in dataset:
    
 				in_batch, = self.data_preprocess(mic_sig_batch, None)
+				# if gt_batch=={}:
+				# 	in_batch, = self.data_preprocess(mic_sig_batch, None)
+				# else:
+				# 	in_batch, dp_batch = self.data_preprocess(mic_sig_batch, torch.sum(gt_batch, -1))
 
 				with torch.cuda.amp.autocast(enabled=self.use_amp):
 					loss_batch, diff_batch, vis_batch = self.model(in_batch) 
+
+				# if gt_batch!={}:
+				# 	vis_batch['dp_tar'] = dp_batch.permute(0, 2, 3, 4, 1)  # (nb, nf, nt, 2, nmic)
 
 				loss_batch = loss_batch.mean() 
 				diff_batch = diff_batch.mean()
@@ -267,7 +276,100 @@ class Learner(ABC):
 					return loss, vis_data
 				else:
 					return loss 
-	
+				
+	def test_epoch_T60(self, dataset, return_metric=False, return_vis=False):
+		""" Test the model with an epoch of the dataset
+		"""
+		self.model.eval()  
+		with torch.no_grad():
+			loss = 0
+			if return_metric: 
+				metric = 0
+			if return_vis:
+				embed = []
+				gt = []
+			pbar = tqdm(enumerate(dataset), total=len(dataset), leave=False) 
+			for batch_idx, (mic_sig_batch, gt_batch) in pbar:
+				in_batch, gt_batch = self.data_preprocess(mic_sig_batch, gt_batch)
+
+				with torch.cuda.amp.autocast(enabled=self.use_amp):
+					pred_batch, embed_batch = self.model(in_batch)
+					# print(str(int(gt_batch.detach().cpu().numpy()[0][0][0]))+'st-result: ', pred_batch.detach().cpu().numpy()[0])
+					# print('result: ', pred_batch.detach().cpu().numpy()[0],gt_batch.detach().cpu().numpy()[0],abs(pred_batch.detach().cpu().numpy()[0]-gt_batch.detach().cpu().numpy()[0]),snr.detach().cpu().numpy()[0])
+					loss_batch = self.loss(pred_batch=pred_batch, gt_batch=gt_batch)
+
+				loss += loss_batch.item()
+
+				if return_metric: 
+					metric_batch = self.evaluate(pred_batch=pred_batch, gt_batch=gt_batch)
+					metric += metric_batch #.item()
+				if return_vis:
+					embed += [embed_batch]
+					gt += [gt_batch]
+
+			loss /= len(dataset)
+			if return_metric: 
+				metric /= len(dataset)
+
+			if return_vis:
+				vis_data = {'embed': torch.cat(embed, dim=0), 'label': torch.cat(gt, dim=0)}
+
+			if return_metric: 
+				if return_vis:
+					return loss, metric, vis_data
+				else:
+					return loss, metric
+			else:
+				if return_vis:
+					return loss, vis_data
+				else:
+					return loss 
+				
+	def test_epoch_DOA(self, dataset, return_metric=False, return_vis=False):
+		""" Test the model with an epoch of the dataset
+		"""
+		self.model.eval()  
+		with torch.no_grad():
+			loss = 0
+			if return_metric: 
+				metric = 0
+			if return_vis:
+				embed = []
+				gt = []
+			for mic_sig_batch, gt_batch in dataset:
+				in_batch, gt_batch = self.data_preprocess(mic_sig_batch, gt_batch)
+
+				with torch.cuda.amp.autocast(enabled=self.use_amp):
+					pred_batch, embed_batch = self.model(in_batch)
+					loss_batch = self.loss(pred_batch=pred_batch, gt_batch=gt_batch)
+
+				loss += loss_batch.item()
+
+				if return_metric: 
+					metric_batch = self.evaluate(pred_batch=pred_batch, gt_batch=gt_batch)
+					metric += metric_batch 
+				if return_vis:
+					embed += [embed_batch]
+					gt += [gt_batch]
+
+			loss /= len(dataset)
+			if return_metric: 
+				metric /= len(dataset)
+
+			if return_vis:
+				vis_data = {'embed': torch.cat(embed, dim=0), 'label': torch.cat(gt, dim=0)}
+
+			if return_metric: 
+				if return_vis:
+					return loss, metric, vis_data
+				else:
+					return loss, metric
+			else:
+				if return_vis:
+					return loss, vis_data
+				else:
+					return loss 
+
 	def smooth_data(self, data_list, alpha=0.8):
 		""" current_smooth_data = alpha * previous_data + (1-alpha) * current_data
 		"""
@@ -545,6 +647,8 @@ class STFTLearner(Learner):
 			stft_rebatch = self.addbatch(stft)
 			reim_rebatch = torch.view_as_real(stft_rebatch) # (nb*(nch-1),nch_pair,nf,nt,2)= (nb,nch,nf,nt,2) when nch=2
 
+			# reim_rebatch = torch.view_as_real(stft) # (nb,nch,nf,nt,2)
+
 			if self.mel_scale:
 				reim_rebatch = self.mel_transform(reim_rebatch.permute(0,1,4,2,3).to('cpu')).permute(0,1,3,4,2).contiguous().to(stft_rebatch.device) # (nb,nch,nmel,nt,2)
 			else:
@@ -553,21 +657,21 @@ class STFTLearner(Learner):
 			data += [reim_rebatch]
 
 		if gt_batch is not None:
-			gt_batch = gt_batch[self.task].to(self.device)
-			gt_batch = self.get_tar_batch(gt_batch=gt_batch)
-			data += [ gt_batch ]
-
-			# if (mic_sig_batch is not None) & (gt_batch.shape==mic_sig_batch.shape):  
-			# 	if nor_flag:
-			# 		dp_mic_sig_batch = gt_batch.to(self.device)
-			# 		dp_stft = self.stft(signal = dp_mic_sig_batch) 	# (nb,nf,nt,nch)
-			# 		dp_stft = dp_stft.permute(0, 3, 1, 2)  # (nb,nch,nf,nt)
-			# 		dp_stft = dp_stft/(mean_value+eps)
-			# 		dp_stft_rebatch = dp_stft  # (nb*(nch-1),nch_pair,nf,nt)
-			# 		dp_reim_rebatch = torch.view_as_real(dp_stft_rebatch) # (nb*(nch-1),nch_pair,nf,nt,2
-			# 		data += [dp_reim_rebatch.to(self.device)]
-			# 	else:
-			# 		data += [gt_batch.to(self.device)]
+			if (mic_sig_batch is not None) & (isinstance(gt_batch, type(mic_sig_batch))): # gt_batch = dp_mic_signal
+				if nor_flag:
+					dp_mic_sig_batch = gt_batch.to(self.device)
+					dp_stft = self.stft(signal = dp_mic_sig_batch) 	# (nb,nf,nt,nch)
+					dp_stft = dp_stft.permute(0, 3, 1, 2)  # (nb,nch,nf,nt)
+					dp_stft = dp_stft/(mean_value+eps)
+					dp_stft_rebatch = dp_stft  # (nb*(nch-1),nch_pair,nf,nt)
+					dp_reim_rebatch = torch.view_as_real(dp_stft_rebatch) # (nb*(nch-1),nch_pair,nf,nt,2
+					data += [dp_reim_rebatch.to(self.device)]
+				else:
+					data += [gt_batch.to(self.device)]
+			else:
+				gt_batch = gt_batch[self.task].to(self.device)
+				gt_batch = self.get_tar_batch(gt_batch=gt_batch)
+				data += [ gt_batch ]
 
 		return data # [Input, TDOA/T60/DRR/DOA/C50/C80]
 	
@@ -623,9 +727,35 @@ class STFTLearner(Learner):
 			Returns: tar_batch - (nbatch, 1)
 		"""
 		if self.task == 'TDOA':
-			tar_batch = gt_batch[:, np.newaxis]*16000 
-		elif (self.task == 'DRR') | (self.task == 'C50') | (self.task == 'T60') | (self.task == 'ABS'):
-			tar_batch = gt_batch[:, np.newaxis]
+			TDOAw_batch = gt_batch*16000  # (nb*nseg*nch-1*nsources)
+			tar_batch = torch.mean(TDOAw_batch[:, :, :, 0], dim=1) 
+		elif self.task == 'T60':
+			T60_batch = gt_batch*1  # (nb)
+			tar_batch = T60_batch[:,np.newaxis]
+		elif self.task == 'DRR':
+			DRRw_batch = gt_batch*1   # (nb*nseg*nsources)
+			tar_batch = torch.mean(DRRw_batch[: ,: , 0:1], dim=1) 
+		elif self.task == 'DOA':
+			DOAw_batch = gt_batch  # (nb*nseg*2*nsources)
+			tar_batch = torch.mean(DOAw_batch[:, :, 0:1, 0], dim=1) # (nb*1) for azimuth estimation
+		elif self.task == 'C50':
+			C50w_batch = gt_batch  # (nb*nseg*nsources)
+			tar_batch = torch.mean(C50w_batch[:, :, 0:1], dim=1) 
+		elif self.task == 'C80':
+			C80w_batch = gt_batch  # (nb*nseg*nsources)
+			tar_batch = torch.mean(C80w_batch[:, :, 0:1], dim=1) 
+		elif self.task == 'SNR':
+			SNR_batch = gt_batch*1 # (nb)
+			tar_batch = SNR_batch[:, np.newaxis]
+		elif self.task == 'ABS':
+			abs_batch = gt_batch*1 # (nb)
+			tar_batch = abs_batch[:, np.newaxis]
+		elif self.task == 'SUR':
+			S_batch = torch.log10(gt_batch*1) # (nb)
+			tar_batch = S_batch[:, np.newaxis]
+		elif self.task == 'VOL':
+			V_batch = torch.log10(gt_batch*1) # (nb)
+			tar_batch = V_batch[:, np.newaxis]
 		else:
 			raise Exception('Task mode unrecognized')
 		return tar_batch
@@ -637,7 +767,12 @@ class STFTLearner(Learner):
 			Returns: loss
         """ 
 
-		loss = torch.nn.functional.mse_loss(pred_batch.contiguous(), gt_batch.contiguous().detach())
+		if self.task != 'DOA':
+			loss = torch.nn.functional.mse_loss(pred_batch.contiguous(), gt_batch.contiguous().detach())
+			# loss = torch.mean(torch.abs(pred_batch.contiguous()-tar_batch.contiguous().detach()))
+		# else:
+		# 	doa_label = torch.round(gt_batch).long()
+		# 	loss = torch.nn.functional.cross_entropy(pred_batch, doa_label)
 
 		return loss
 
@@ -647,8 +782,8 @@ class STFTLearner(Learner):
 					gt_batch - (nbatch, 1)
 			Returns: MAE
         """
-
-		mae = torch.mean(torch.abs(pred_batch.contiguous().detach()-gt_batch.contiguous().detach()))
+		if self.task != 'DOA':
+			mae = torch.mean(torch.abs(pred_batch.contiguous().detach()-gt_batch.contiguous().detach()))
 
 		return mae
 	
@@ -684,3 +819,207 @@ class STFTLearner(Learner):
 		max_test = torch.max(gt_test, dim=0)[0].item()
 
 		return mae_test, min_test, max_test, mae, mean, min, max
+
+# class JointSTFTLearner(Learner):
+# 	""" Joint learner for models which use STFTs of multi-channel microphone singals as input (multi-task learning)
+# 	"""
+# 	def __init__(self, model, win_len, win_shift_ratio, nfft, fre_used_ratio, fs, mel_scale=False, task=None, ch_mode='M'):
+# 		super().__init__(model)
+
+# 		self.ch_mode = ch_mode
+# 		self.stft = at_module.STFT(
+# 			win_len=win_len, 
+# 			win_shift_ratio=win_shift_ratio, 
+# 			nfft=nfft
+# 			)
+# 		self.mel_scale = mel_scale
+# 		if mel_scale:
+# 			self.mel_transform = audio.transforms.MelScale(
+# 				n_mels=30,
+# 				sample_rate=fs,
+# 				f_min=0,
+# 				f_max=fs//2,
+# 				n_stft=nfft//2+1,
+# 				)
+# 		if fre_used_ratio == 1:
+# 			self.fre_range_used = range(1, int(nfft/2*fre_used_ratio)+1, 1)
+# 		elif fre_used_ratio == 0.5:
+# 			self.fre_range_used = range(0, int(nfft/2*fre_used_ratio), 1)
+# 		else:
+# 			raise Exception('Prameter fre_used_ratio unexpected')
+# 		# self.addbatch = at_module.AddChToBatch(ch_mode=self.ch_mode)
+# 		# self.removebatch = at_module.RemoveChFromBatch(ch_mode=self.ch_mode)
+# 		self.task = task
+
+# 	def data_preprocess(self, mic_sig_batch=None, gt_batch=None, eps=1e-6):
+# 		data = []
+# 		if mic_sig_batch is not None:
+# 			mic_sig_batch = mic_sig_batch.to(self.device)
+# 			stft = self.stft(signal = mic_sig_batch) 	# (nb,nf,nt,nch)
+# 			stft = stft.permute(0, 3, 1, 2)  # (nb,nch,nf,nt)
+
+# 			nor_flag = True
+# 			if nor_flag:
+# 				mag = torch.abs(stft[:,0:1,:,:])
+# 				mean_value = torch.mean(mag.reshape(mag.shape[0],-1), dim=1)
+# 				mean_value = mean_value[:,np.newaxis,np.newaxis,np.newaxis].expand(mag.shape)
+# 				stft = stft/(mean_value+eps) # (nb*(nch-1),nch_pair,nf,nt) = (nb,nch,nf,nt) when nch=2
+
+# 			## Change batch for multi-channel data (nb,nch,nf,nt)→(nb*(nch-1),2,nf,nt)/(nb*(nch-1)*nch/2,2,nf,nt)
+# 			# stft_rebatch = self.addbatch(stft)
+# 			# stft_rebatch = stft  # (nb*(nch-1),nch_pair,nf,nt)
+# 			# reim_rebatch = torch.view_as_real(stft_rebatch) # (nb*(nch-1),nch_pair,nf,nt,2)
+
+# 			reim_rebatch = torch.view_as_real(stft) # (nb,nch,nf,nt,2)
+			
+# 			if self.mel_scale:
+# 				reim_rebatch = self.mel_transform(reim_rebatch.permute(0,1,4,2,3).to('cpu')).permute(0,1,3,4,2).contiguous().to(stft_rebatch.device) # (nb,nch,nmel,nt,2)
+# 			else:
+# 				reim_rebatch = reim_rebatch[:, :, self.fre_range_used, :, :]
+
+# 			data += [reim_rebatch]
+		
+# 		if gt_batch is not None:
+
+# 			gt = {}
+# 			task = self.task.split('-')
+# 			keys = ['TDOA', 'DRR', 'T60', 'C50', 'SNR', 'ABS', 'SUR', 'VOL']
+# 			for key in keys:
+# 				if (key in task) & (key in gt_batch.keys()):
+# 					gt[key] = gt_batch[key].to(self.device)
+
+# 			data += [ gt ]
+
+# 			assert (len(task)==len(gt.keys())) | (len(gt.keys())==1), 'task or gt error'
+
+# 		return data # [Input, TDOA/T60/DRR/DOA/C50/C80]
+
+# 	def loss(self, pred_batch, gt_batch):
+# 		loss = 0
+# 		task = self.task.split('-')
+
+# 		pred_task_idx = -1
+# 		gt_task_idx = -1
+# 		if 'TDOA' in task:
+# 			pred_task_idx += 1
+# 			if 'TDOA' in gt_batch.keys():
+# 				gt_task_idx += 1
+# 				TDOAw_batch = gt_batch['TDOA']*16000  # (nb*nseg*nch-1*nsources)
+# 				tar_TDOA = torch.mean(TDOAw_batch[:,:,0,0:1], dim=1) 
+# 				loss += torch.nn.functional.mse_loss(pred_batch[:, pred_task_idx:pred_task_idx+1].contiguous(), tar_TDOA.contiguous().detach())
+# 		if 'DRR' in task:
+# 			pred_task_idx += 1
+# 			if 'DRR' in gt_batch.keys():
+# 				gt_task_idx += 1
+# 				DRRw_batch = gt_batch['DRR']*1   # (nb*nseg*nsources)
+# 				tar_DRR = torch.mean(DRRw_batch[:,:,0:1], dim=1) 
+# 				loss += torch.nn.functional.mse_loss(pred_batch[:, pred_task_idx:pred_task_idx+1].contiguous(), tar_DRR.contiguous().detach()) 
+# 		if 'T60' in task:
+# 			pred_task_idx += 1
+# 			if 'T60' in gt_batch.keys():
+# 				gt_task_idx += 1
+# 				T60_batch = gt_batch['T60']*1  # (nb)
+# 				tar_T60 = T60_batch[:,np.newaxis]
+# 				loss += torch.nn.functional.mse_loss(pred_batch[:, pred_task_idx:pred_task_idx+1].contiguous(), tar_T60.contiguous().detach())
+# 		if 'C50' in task:
+# 			pred_task_idx += 1
+# 			if 'C50' in gt_batch.keys():
+# 				gt_task_idx += 1
+# 				C50w_batch = gt_batch['C50']*1  # (nb*nseg*nsources)
+# 				tar_C50 = torch.mean(C50w_batch[:,:,0:1], dim=1) 
+# 				loss += torch.nn.functional.mse_loss(pred_batch[:, pred_task_idx:pred_task_idx+1].contiguous(), tar_C50.contiguous().detach())
+# 		if 'ABS' in task:
+# 			pred_task_idx += 1
+# 			if 'ABS' in gt_batch.keys():
+# 				gt_task_idx += 1
+# 				abs_batch = gt_batch['ABS']*1 # (nb)
+# 				tar_ABS = abs_batch[:,np.newaxis]
+# 				loss += torch.nn.functional.mse_loss(pred_batch[:, pred_task_idx:pred_task_idx+1].contiguous(), tar_ABS.contiguous().detach())
+# 		if 'SNR' in task:
+# 			pred_task_idx += 1
+# 			if 'SNR' in gt_batch.keys():
+# 				gt_task_idx += 1
+# 				SNR_batch = gt_batch['SNR']*1 # (nb)
+# 				tar_SNR = SNR_batch[:,np.newaxis]
+# 				loss += torch.nn.functional.mse_loss(pred_batch[:, pred_task_idx:pred_task_idx+1].contiguous(), tar_SNR.contiguous().detach())
+# 		if 'SUR' in task:
+# 			pred_task_idx += 1
+# 			if 'SUR' in gt_batch.keys():
+# 				gt_task_idx += 1
+# 				S_batch = torch.log10(gt_batch['SUR']*1) # (nb)
+# 				tar_SUR = S_batch[:,np.newaxis]
+# 				loss += torch.nn.functional.mse_loss(pred_batch[:, pred_task_idx:pred_task_idx+1].contiguous(), tar_SUR.contiguous().detach())
+# 		if 'VOL' in task:
+# 			pred_task_idx += 1
+# 			if 'VOL' in gt_batch.keys():
+# 				gt_task_idx += 1
+# 				V_batch = torch.log10(gt_batch['VOL']*1) # (nb)
+# 				tar_VOL = V_batch[:,np.newaxis]
+# 				loss += torch.nn.functional.mse_loss(pred_batch[:, pred_task_idx:pred_task_idx+1].contiguous(), tar_VOL.contiguous().detach())
+# 		loss = loss/(gt_task_idx+1)
+
+# 		return loss
+
+# 	def evaluate(self, pred_batch, gt_batch):
+# 		task = self.task.split('-')
+# 		pred_task_idx = -1
+# 		gt_task_idx = -1
+# 		mae = torch.zeros((len(task))).to(pred_batch.device)
+# 		if 'TDOA' in task:
+# 			pred_task_idx += 1
+# 			if 'TDOA' in gt_batch.keys():
+# 				gt_task_idx += 1
+# 				TDOAw_batch = gt_batch['TDOA']*16000  # (nb*nseg*nch-1*nsources)
+# 				tar_TDOA = torch.mean(TDOAw_batch[:,:,0,0:1], dim=1) 
+# 				mae[pred_task_idx] = torch.mean(torch.abs(pred_batch[:, pred_task_idx:pred_task_idx+1].contiguous().detach()-tar_TDOA.contiguous().detach()))
+# 		if 'DRR' in task:
+# 			pred_task_idx += 1
+# 			if 'DRR' in gt_batch.keys():
+# 				gt_task_idx += 1
+# 				DRRw_batch = gt_batch['DRR']*1   # (nb*nseg*nsources)
+# 				tar_DRR = torch.mean(DRRw_batch[:,:,0:1], dim=1)
+# 				mae[pred_task_idx] = torch.mean(torch.abs(pred_batch[:, pred_task_idx:pred_task_idx+1].contiguous().detach()-tar_DRR.contiguous().detach()))
+# 		if 'T60' in task: 
+# 			pred_task_idx += 1
+# 			if 'T60' in gt_batch.keys():
+# 				gt_task_idx += 1
+# 				T60_batch = gt_batch['T60']*1  # (nb)
+# 				tar_T60 = T60_batch[:,np.newaxis]
+# 				mae[pred_task_idx] = torch.mean(torch.abs(pred_batch[:, pred_task_idx:pred_task_idx+1].contiguous().detach()-tar_T60.contiguous().detach()))
+# 		if 'C50' in task:
+# 			pred_task_idx += 1
+# 			if 'C50' in gt_batch.keys():
+# 				gt_task_idx += 1
+# 				C50w_batch = gt_batch['C50']*1  # (nb*nseg*nsources)
+# 				tar_C50 = torch.mean(C50w_batch[:,:,0:1], dim=1)
+# 				mae[pred_task_idx] = torch.mean(torch.abs(pred_batch[:, pred_task_idx:pred_task_idx+1].contiguous().detach()-tar_C50.contiguous().detach()))
+# 		if 'ABS' in task:
+# 			pred_task_idx += 1
+# 			if 'ABS' in gt_batch.keys():
+# 				gt_task_idx += 1
+# 				abs_batch = gt_batch['ABS']*1 # (nb)
+# 				tar_ABS = abs_batch[:,np.newaxis]
+# 				mae[pred_task_idx] = torch.mean(torch.abs(pred_batch[:, pred_task_idx:pred_task_idx+1].contiguous().detach()-tar_ABS.contiguous().detach()))
+# 		if 'SNR' in task: 
+# 			pred_task_idx += 1
+# 			if 'SNR' in gt_batch.keys():
+# 				gt_task_idx += 1
+# 				SNR_batch = gt_batch['SNR']*1 # (nb)
+# 				tar_SNR = SNR_batch[:,np.newaxis]
+# 				mae[pred_task_idx] = torch.mean(torch.abs(pred_batch[:, pred_task_idx:pred_task_idx+1].contiguous().detach()-tar_SNR.contiguous().detach()))
+# 		if 'SUR' in task:
+# 			pred_task_idx += 1
+# 			if 'SUR' in gt_batch.keys():
+# 				gt_task_idx += 1
+# 				S_batch = torch.log10(gt_batch['SUR']*1) # (nb)
+# 				tar_SUR = S_batch[:,np.newaxis]
+# 				mae[pred_task_idx] = torch.mean(torch.abs(pred_batch[:, pred_task_idx:pred_task_idx+1].contiguous().detach()-tar_SUR.contiguous().detach()))
+# 		if 'VOL' in task:
+# 			pred_task_idx += 1
+# 			if 'VOL' in gt_batch.keys():
+# 				gt_task_idx += 1
+# 				V_batch = torch.log10(gt_batch['VOL']*1) # (nb)
+# 				tar_VOL = V_batch[:,np.newaxis]
+# 				mae[pred_task_idx] = torch.mean(torch.abs(pred_batch[:, pred_task_idx:pred_task_idx+1].contiguous().detach()-tar_VOL.contiguous().detach()))
+ 
+# 		return mae

@@ -82,9 +82,9 @@ class opt():
         # RIR (& noise) & signal
         # dirs['simulate'] = dirs['gerdata'] + '/RIR-simulate' 
         dirs['DCASE'] = dirs['data'] + '/RIR/DCASE/TAU-SRIR_DB'
-        dirs['MIR'] = dirs['data'] + '/RIR/MIRDB/Impulse_response_Acoustic_Lab_Bar-Ilan_University'
+        dirs['MIR'] = dirs['data'] + '/RIR/MIR/Impulse_response_Acoustic_Lab_Bar-Ilan_University'
         dirs['Mesh'] = dirs['data'] + '/RIR/Mesh'
-        dirs['BUTReverb'] = dirs['data'] + '/RIR/BUT_ReverbDB/RIRs'
+        dirs['BUTReverb'] = dirs['data'] + '/RIR/BUTReverb/RIRs'
         dirs['IRArni'] = dirs['data'] + '/RIR/IR_Arni/IR'
         dirs['dEchorate'] = dirs['data'] + '/RIR/dEchorate'
         dirs['ACE'] = dirs['data'] + '/RIR/ACE'

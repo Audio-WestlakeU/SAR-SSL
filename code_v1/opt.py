@@ -11,13 +11,41 @@ class opt_pretrain():
         self.work_dir = r'~'
         self.work_dir = os.path.abspath(os.path.expanduser(self.work_dir))
         self.work_dir_local = os.path.abspath(os.path.expanduser(self.work_dir))
+       
+        self.sig_ver = ''
+        self.rir_ver = ''
+        self.noise_flag = ''
+        ##########################################
+        self.time_ver = '0821'
+        ##########################################
+        
+        # Noise setting: w/ noise or w/o noise
+        # self.wnoise = False
+        self.wnoise = True
+        if self.wnoise: 
+            self.noise_flag = '-Noi15_30dB'
+            snr_range = [15, 30]
+            noise_type = ['diffuse_white'] 
+        else:
+            self.noise_flag = ''
+            snr_range = [100, 100]
+            noise_type = ['']
+        self.noise_setting = {'noise_enable': self.wnoise, 'snr_range': snr_range, 'noise_type': noise_type,}
+        
+        # Array setting
+        self.array_setting = {'nmic':  2}
 
-        # Acoustic setting
-        self.acoustic_setting = {
-            'sound_speed': 343.0, 
-            'fs': 16000, 
-            'nmic': 2,
-            'mic_dist_range':[0.03, 0.20]}
+        # Other acoustic setting
+        self.acoustic_setting = {'sound_speed': 343.0, 'fs': 16000}
+
+        self.extra_info = '' # needs add '-' when used
+
+        # Pretrain: simulated or real-world
+        ##########################################
+        self.pretrain_sim = True
+        # self.pretrain_sim = False
+        
+        ##########################################
 
     def parse(self):
         """ Function: Define optional arguments
@@ -39,7 +67,7 @@ class opt_pretrain():
 
         parser.add_argument('--sources', type=int, nargs='+', default=[1], metavar='Sources', help='number of sources (default: 1)')
         parser.add_argument('--source-state', type=str, default='static', metavar='SourceState', help='state of sources (default: Static)') # ['static', 'mobile']
-        parser.add_argument('--simu-exp', action='store_true', default=False, help='Experiments on simulated data (default: False)')
+        parser.add_argument('--rir-gen', type=str, default='wo', metavar='RIRGen', help='mode of RIR generation (default: Without)') # ['wo', 'online', 'offline']
 
         parser.add_argument('--pretrain', action='store_true', default=False, help='change to pretrain stage (default: False)')
         parser.add_argument('--pretrain-frozen-encoder', action='store_true', default=False, help='change to pretrain stage (default: False)')
@@ -54,10 +82,15 @@ class opt_pretrain():
         self.time = args.time
         self.work_dir = args.work_dir
 
+        args.noise_setting = self.noise_setting
+        args.array_setting = self.array_setting
         args.acoustic_setting = self.acoustic_setting
+
+        self.rir_ver = ''
+        self.sig_ver = self.rir_ver + self.noise_flag
         
-        data = 'sim' if args.simu_exp else 'real'
-        print('\ntime='+self.time, 'data='+data)
+        data = 'sim' if self.pretrain_sim else 'real'
+        print('\ntime='+self.time, 'data version='+self.sig_ver, 'noise='+str(self.wnoise), 'data='+data)
         
         return args
 
@@ -74,36 +107,83 @@ class opt_pretrain():
         dirs['gerdata'] = self.work_dir_local + '/SAR-SSL/data'
         dirs['exp'] = work_dir + '/SAR-SSL/exp'
 
-        dirs['micsig_simu_pretrain'] = dirs['gerdata'] + '/MicSig/simu/pretrain'
-        dirs['micsig_simu_preval'] = dirs['gerdata'] + '/MicSig/simu/preval'
-        dirs['micsig_simu_pretest'] = dirs['gerdata'] + '/MicSig/simu/pretest'
-        dirs['micsig_simu_pretest_ins'] = [dirs['gerdata'] + '/MicSig/simu/pretest_ins_T1000']
-        dirs['micsig_real_pretrain'] = {
-            'DCASE': dirs['gerdata'] + '/MicSig/real/pretrain/DCASE',
-            'MIR': dirs['gerdata'] + '/MicSig/real/pretrain/MIR',
-            'Mesh': dirs['gerdata'] + '/MicSig/real/pretrain/Mesh',
-            'BUTReverb': dirs['gerdata'] + '/MicSig/real/pretrain/BUTReverb',
-            'dEchorate': dirs['gerdata'] + '/MicSig/real/pretrain/dEchorate',
-            'ACE': dirs['gerdata'] + '/MicSig/real/pretrain/ACE',
-            'LOCATA': dirs['data'] + '/MicSig/LOCATA',
-            'MCWSJ': dirs['data'] + '/MicSig/MC_WSJ_AV',
-            'LibriCSS': dirs['data'] + '/MicSig/LibriCSS',
-            'AMI': dirs['data'] + '/MicSig/AMI',
-            'AISHELL4': dirs['data'] + '/MicSig/AISHELL-4',
-            'M2MeT': dirs['data'] + '/MicSig/M2MeT',
-            'RealMAN': dirs['data'] + '/MicSig/RealMAN', #dirs['data'] + '/MicSig/aligned_static_high_精细对齐_correctDPRIR_filtered3'
-            }
-        dirs['micsig_real_preval'] = {
-            'DCASE': dirs['gerdata'] + '/MicSig/real/preval/DCASE',
-            'BUTReverb': dirs['gerdata'] + '/MicSig/real/preval/BUTReverb',
-            'AISHELL4': dirs['data'] + '/MicSig/AISHELL-4',
-            'M2MeT': dirs['data'] + '/MicSig/M2MeT',
-            'RealMAN': dirs['data'] + '/MicSig/RealMAN',
-            }
-        dirs['micsig_real_pretest'] = {
-            'ACE': dirs['gerdata'] + '/MicSig/real/pretrain/ACE',
-            'LOCATA': dirs['data'] + '/MicSig/LOCATA',
-            }
+        dirs['sousig_pretrain'] = dirs['data'] + '/SrcSig/wsj0/tr'
+        dirs['sousig_preval'] = dirs['data'] + '/SrcSig/wsj0/dt'
+        dirs['sousig_train'] = dirs['data'] + '/SrcSig/wsj0/tr'
+        dirs['sousig_val'] = dirs['data'] + '/SrcSig/wsj0/dt'
+        dirs['sousig_test'] = dirs['data'] + '/SrcSig/wsj0/et'
+        
+        dirs['noisig_pretrain'] = dirs['data'] + '/NoiSig/5th-DNS-Challenge/noise_fullband'
+        dirs['noisig_preval'] = dirs['data'] + '/NoiSig/5th-DNS-Challenge/noise_fullband'
+        dirs['noisig_train'] = dirs['data'] + '/NoiSig/NOISEX-92'
+        dirs['noisig_val'] = dirs['data'] + '/NoiSig/NOISEX-92'
+        dirs['noisig_test'] = dirs['data'] + '/NoiSig/NOISEX-92'
+
+        # RIR (+ noise) & mic signal
+        dirs['simulate'] = dirs['gerdata'] + '/RIR-simulate' 
+        dirs['DCASE'] = dirs['data'] + '/RIR/DCASE/TAU-SRIR_DB'
+        dirs['MIR'] = dirs['data'] + '/RIR/MIRDB/Impulse_response_Acoustic_Lab_Bar-Ilan_University'
+        dirs['Mesh'] = dirs['data'] + '/RIR/Mesh'
+        dirs['BUTReverb'] = dirs['data'] + '/RIR/BUTReverb/RIRs'
+        dirs['IRArni'] = dirs['data'] + '/RIR/IR_Arni/IR'
+        dirs['dEchorate'] = dirs['data'] + '/RIR/dEchorate'
+        dirs['ACE'] = dirs['data'] + '/RIR/ACE'
+        
+        dirs['LOCATA'] = dirs['data'] + '/MicSig/LOCATA'
+        dirs['CHiME3'] = dirs['data'] + '/MicSig/CHiME3'
+        dirs['MCWSJ'] = dirs['data'] + '/MicSig/MC_WSJ_AV'
+        dirs['LibriCSS'] = dirs['data'] + '/MicSig/LibriCSS'
+        dirs['AMI'] = dirs['data'] + '/MicSig/AMI'
+        dirs['AISHELL4'] = dirs['data'] + '/MicSig/AISHELL-4'
+        dirs['M2MeT'] = dirs['data'] + '/MicSig/M2MeT'
+        # dirs['CHiME56'] = dirs['data'] + '/SenSig/CHiME5_6'
+        # dirs['Our'] = dirs['data'] + '/SenSig/aligned_static_high_精细对齐_correctDPRIR_filtered3'
+        dirs['RealMAN'] = dirs['data'] + '/MicSig/RealMAN'
+        # dirs['HI-MIA'] = dirs['data'] + '/SenSig/HI-MIA'
+        # dirs['AV163'] = dirs['data'] + '/SenSig/AV16.3'
+
+        ## Generated mic signal
+        dirs_pretrain = dirs['gerdata'] + '/SenSig-pretrain' + self.sig_ver
+        dirs_preval = dirs['gerdata'] + '/SenSig-preval' + self.sig_ver
+        dirs_pretest = dirs['gerdata'] + '/SenSig-test' + self.sig_ver
+        dirs_pretest_ins = dirs['gerdata'] + '/SenSig-test-ins'
+        
+        dirs['sensig_pretrain'] = [ 
+            dirs_pretrain + '/simulate' + self.time_ver,
+            dirs_pretrain + '/DCASE_selectroom',         
+            dirs_pretrain.replace(self.noise_flag, '') + '/MIR',
+            dirs_pretrain.replace(self.noise_flag, '')  + '/Mesh',
+            dirs_pretrain + '/ACE',
+            dirs_pretrain + '/dEchorate',
+            dirs_pretrain + '/BUTReverb_selectroom',
+            # dirs_pretrain.replace(self.noise_flag, '')  + '/LOCATA', 
+            ]
+
+        dirs['sensig_preval'] = [   
+            dirs_preval + '/simulate' + self.time_ver,
+            dirs_preval + '/DCASE_selectroom',           
+            dirs_preval.replace(self.noise_flag, '') + '/MIR',
+            dirs_preval.replace(self.noise_flag, '') + '/Mesh',
+            dirs_preval + '/ACE',
+            dirs_preval + '/dEchorate',
+            dirs_preval + '/BUTReverb_selectroom',
+            # dirs_preval.replace(self.noise_flag, '') + '/LOCATA', 
+            ] 
+        
+        dirs['sensig_pretest'] = [  
+            dirs_pretest + '/simulate' + self.time_ver,
+            dirs_pretest + '/DCASE',           
+            dirs_pretest.replace(self.noise_flag, '') + '/MIR',
+            dirs_pretest.replace(self.noise_flag, '') + '/Mesh',
+            dirs_pretest + '/ACE',
+            dirs_pretest + '/dEchorate',
+            dirs_pretest + '/BUTReverb', 
+            # dirs_pretest.replace(self.noise_flag, '') + '/LOCATA_task1_4s', 
+            ]
+        
+        dirs['sensig_pretest_ins'] = [  dirs_pretest_ins + '/simulate0916-T200',
+                                        dirs_pretest_ins + '/simulate0916-T500',
+                                        dirs_pretest_ins + '/simulate0916-T1000',]
 
         # Experimental data
         dirs['log_pretrain'] = dirs['exp'] + '/pretrain/' + self.time
@@ -121,18 +201,31 @@ class opt_downstream():
         self.work_dir = os.path.abspath(os.path.expanduser(self.work_dir))
         self.work_dir_local = os.path.abspath(os.path.expanduser(self.work_dir))
        
-
+        self.sig_ver = ''
+        self.rir_ver = ''
+        self.noise_flag = ''
         ##########################################
         self.time_ver = '0821'
         # self.time_ver = '0508'
         ##########################################
+        
+        # Noise setting: w/ noise or w/o noise
+        self.wnoise = True
+        if self.wnoise: 
+            self.noise_flag = '-Noi15_30dB'
+            snr_range = [15, 30]
+            noise_type = ['diffuse_white'] 
+        else:
+            self.noise_flag = ''
+            snr_range = [100, 100]
+            noise_type = ['']
+        self.noise_setting = {'noise_enable': self.wnoise, 'snr_range': snr_range, 'noise_type': noise_type}
+        
+        # Array setting
+        self.array_setting = {'nmic': 2}
 
         # Other acoustic setting
-        self.acoustic_setting = {
-            'sound_speed': 343.0, 
-            'fs': 16000, 
-            'snr_range': [15, 30],
-            'nmic': 2,}
+        self.acoustic_setting = {'sound_speed': 343.0, 'fs': 16000}
 
         self.extra_info = '' 
         
@@ -141,29 +234,29 @@ class opt_downstream():
         self.ds_embed = ''
         self.ds_nsimroom = 0
 
-        # # Downstream: simulated or real-world
-        # ##########################################
-        # # downstream_sim = True
-        # downstream_sim = False
-        # ##########################################
-        # if downstream_sim:
-        #     ds_task = ['']
-        #     ds_data = 'sim'
-        #     # self.train_test_model = 'sim_' + self.time_ver 
-        #     real_sim_ratio = [0, 1]
-        # else:
-        #     ds_task = ['']
-        #     ds_data = 'real'
-        #     real_sim_ratio = [1, 0] # real
-        #     # real_sim_ratio = [1, 1] # real + sim
-        #     # real_sim_ratio = [0, 1] # sim
-        #     # self.train_test_model = 'real_' + self.time_ver + '_train' + str(real_sim_ratio[0]) + 'real'+ str(real_sim_ratio[1]) + 'sim_valreal' 
-        #     # self.train_test_model = 'real_' + self.time_ver + '_train0real1sim_valsim'  # only sim 
+        # Downstream: simulated or real-world
+        ##########################################
+        # downstream_sim = True
+        downstream_sim = False
+        ##########################################
+        if downstream_sim:
+            ds_task = ['']
+            ds_data = 'sim'
+            # self.train_test_model = 'sim_' + self.time_ver 
+            real_sim_ratio = [0, 1]
+        else:
+            ds_task = ['']
+            ds_data = 'real'
+            real_sim_ratio = [1, 0] # real
+            # real_sim_ratio = [1, 1] # real + sim
+            # real_sim_ratio = [0, 1] # sim
+            # self.train_test_model = 'real_' + self.time_ver + '_train' + str(real_sim_ratio[0]) + 'real'+ str(real_sim_ratio[1]) + 'sim_valreal' 
+            # self.train_test_model = 'real_' + self.time_ver + '_train0real1sim_valsim'  # only sim 
 
-        # self.ds_specifics = {
-        #     'task': ds_task, 
-        #     'data': ds_data,
-        #     'real_sim_ratio': real_sim_ratio, }
+        self.ds_specifics = {
+            'task': ds_task, 
+            'data': ds_data,
+            'real_sim_ratio': real_sim_ratio, }
 
     def parse(self):
         """ Function: Define optional arguments
@@ -184,11 +277,11 @@ class opt_downstream():
 
         parser.add_argument('--sources', type=int, nargs='+', default=[1], metavar='Sources', help='number of sources (default: 1)')
         parser.add_argument('--source-state', type=str, default='static', metavar='SourceState', help='state of sources (default: Static)') # ['static', 'mobile']
-        parser.add_argument('--simu-exp', action='store_true', default=False, help='experiments on simulated data (default: False)')
-
+        parser.add_argument('--rir-gen', type=str, default='wo', metavar='RIRGen', help='mode of RIR generation (default: Without)') # ['wo', 'online', 'offline']
+ 
         parser.add_argument('--ds-train', action='store_true', default=False, help='change to train stage of downstream tasks (default: False)')
         parser.add_argument('--ds-trainmode', type=str, default='finetune', metavar='DSTrainMode', help='how to train downstream models (default: finetune)') # ['scratchUP', 'scratchLOW', 'finetune', 'lineareval']
-        parser.add_argument('--ds-task', type=str, nargs='+', default=[''], metavar='DSTask', help='downstream task (default: TDOA, DRR, T60 estimation)')
+        parser.add_argument('--ds-task', type=str, nargs='+', default=self.ds_specifics['task'], metavar='DSTask', help='downstream task (default: TDOA, DRR, T60 estimation)')
         parser.add_argument('--ds-token', type=str, default='all', metavar='DSToken', help='downstream token (default: all)') # ['all', 'cls']
         parser.add_argument('--ds-head', type=str, default='mlp', metavar='DSHead', help='downstream head (default: mlp)') # ['mlp', 'crnn_in', 'crnn_med', 'crnn_out']
         parser.add_argument('--ds-embed', type=str, default='spat', metavar='DSEmbed', help='downstream embed (default: spat)') # ['spec_spat', 'spec', 'spat']
@@ -200,31 +293,34 @@ class opt_downstream():
         args = parser.parse_args()
         assert (args.ds_train + args.ds_test)==1, 'Downstream stage (train or test) is not defined'
         assert args.ds_trainmode in ['sratchUP', 'scratchLOW', 'finetune', 'lineareval'], 'Downstream train mode in not defined'
-        self.simu_exp = args.simu_exp
         self.time = args.time
         self.work_dir = args.work_dir
         self.ds_token = args.ds_token
         self.ds_head = args.ds_head
         self.ds_embed = args.ds_embed
         self.ds_nsimroom = args.ds_nsimroom
+
+        args.noise_setting = self.noise_setting
+        args.array_setting = self.array_setting
+        args.acoustic_setting = self.acoustic_setting
         
         # args.ds_task = ['T60']
-        self.ds_specifics = {'task': args.ds_task}
-        if self.simu_exp:
-            print('\nSimulated experiments:', 'time='+self.time, 'task='+str(args.ds_task), 'ds-embed='+self.ds_embed)
-        else:
+        self.ds_specifics['task'] = args.ds_task
+        if 'real' in self.ds_specifics['data']:
             if ('TDOA' in args.ds_task) & (len(args.ds_task)==1):
                 ds_data = 'real_locata'
             else:
                 ds_data = 'real_ace'
             self.ds_specifics['data'] = ds_data
             self.ds_specifics['real_sim_ratio'] = args.ds_real_sim_ratio
-            print('\nReal-world experiments:', 'time='+self.time, 'task='+str(args.ds_task), 'ds-embed='+self.ds_embed, 'data='+self.ds_specifics['data'], 'real_sim_ratio='+str(self.ds_specifics['real_sim_ratio']))
-
         args.ds_specifics = self.ds_specifics
-        args.acoustic_setting = self.acoustic_setting
-        
-        # add argument
+
+        self.rir_ver = ''
+        self.sig_ver = self.rir_ver + self.noise_flag
+        data = self.ds_specifics['data']
+        print('\ntime='+self.time, 'data version='+self.sig_ver, 'noise='+str(self.wnoise), 'data='+data, 'task='+str(args.ds_task), 'ds-embed='+self.ds_embed)
+
+         # add argument
         if (args.ds_trainmode == 'scratchUP'):
             bs_set = [32] 
             nepoch = 200
@@ -240,13 +336,12 @@ class opt_downstream():
         else:
             ### use pretrained model for downstream tasks
             ## Simulate data
-            if self.simu_exp:
+            if 'sim' in data:
                 bs_set = [8] # simulated
                 lr_set = [0.001, 0.0005, 0.0001, 0.00005] # simulated
                 nepoch = 200
                 num = args.ds_nsimroom * 100
                 ntrial = np.maximum(1, round(32/(args.ds_nsimroom+10e-4)))
-                self.ntrail = ntrial
                 args.ds_setting = {}
                 args.ds_setting['TDOA'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
                 args.ds_setting['DRR'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
@@ -290,7 +385,8 @@ class opt_downstream():
                 # # # # nepoch = 150 # C50
                 # # # nepoch = 50 # ABS
                 # # # nepoch = 200 # TDOA
-                
+               
+
                 args.ds_setting = {}
                 args.ds_setting['TDOA'] = {'nepoch': nepoch, 'num': num_TDOA, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
                 args.ds_setting['DRR'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
@@ -312,44 +408,73 @@ class opt_downstream():
         dirs['gerdata'] = self.work_dir_local + '/SAR-SSL/data'
         dirs['exp'] = work_dir + '/SAR-SSL/exp'
 
-        dirs['srcsig_train'] = dirs['data'] + '/SrcSig/wsj0/tr'
-        dirs['srcsig_val'] = dirs['data'] + '/SrcSig/wsj0/dt'
-        dirs['srcsig_test'] = dirs['data'] + '/SrcSig/wsj0/et'
+        dirs['sousig_pretrain'] = dirs['data'] + '/SrcSig/wsj0/tr'
+        dirs['sousig_preval'] = dirs['data'] + '/SrcSig/wsj0/dt'
+        dirs['sousig_train'] = dirs['data'] + '/SrcSig/wsj0/tr'
+        dirs['sousig_val'] = dirs['data'] + '/SrcSig/wsj0/dt'
+        dirs['sousig_test'] = dirs['data'] + '/SrcSig/wsj0/et'
         
+        dirs['noisig_pretrain'] = dirs['data'] + '/NoiSig/5th-DNS-Challenge/noise_fullband'
+        dirs['noisig_preval'] = dirs['data'] + '/NoiSig/5th-DNS-Challenge/noise_fullband'
         dirs['noisig_train'] = dirs['data'] + '/NoiSig/NOISEX-92'
         dirs['noisig_val'] = dirs['data'] + '/NoiSig/NOISEX-92'
         dirs['noisig_test'] = dirs['data'] + '/NoiSig/NOISEX-92'
 
-        # simualted experiments
-        if self.simu_exp:
-            dirs['micsig_train_simu'] = []
-            micsig_train_simu_dir = dirs['gerdata'] + '/MicSig/simu_ds/train'
-            for trail_idx in range(self.ntrail):
-                room_dirs = []
-                for room_idx in range(self.ds_nsimroom):
-                    idx = trail_idx * self.ds_nsimroom + room_idx + 1
-                    room_dirs += [os.path.join(micsig_train_simu_dir , 'R'+str(idx))]
-                dirs['micsig_train_simu'] += [room_dirs]
+        # RIR (+ noise) & sensor signal
+        dirs['simulate'] = dirs['gerdata'] + '/RIR-simulate' 
+        dirs['DCASE'] = dirs['data'] + '/RIR/DCASE/TAU-SRIR_DB'
+        dirs['Mesh'] = dirs['data'] + '/RIR/Mesh'
+        dirs['MIR'] = dirs['data'] + '/RIR/MIR/Impulse_response_Acoustic_Lab_Bar-Ilan_University'
+        dirs['dEchorate'] = dirs['data'] + '/RIR/dEchorate'
+        dirs['BUTReverb'] = dirs['data'] + '/RIR/BUTReverb/RIRs'
+        dirs['ACE'] = dirs['data'] + '/RIR/ACE'
+        dirs['LOCATA'] = dirs['data'] + '/SenSig/LOCATA'
 
-            dirs['micsig_val_simu'] = dirs['gerdata'] + '/MicSig/simu_ds/val'
-            dirs['micsig_test_simu'] = dirs['gerdata'] + '/MicSig/simu_ds/test'
+        ## RIR / generated mic signal for downstream tasks
+        dirs_train = dirs['gerdata'] + '/SenSig-train' + self.sig_ver
+        dirs_val = dirs['gerdata'] + '/SenSig-val' + self.sig_ver
+        dirs_test = dirs['gerdata'] + '/SenSig-test' + self.sig_ver
+        dirs['sensig_train'] = []
+        dirs['sensig_val'] = []
+        dirs['sensig_test'] = []
+        # dirs['sensig_test_large'] = []
 
-            data_model_flag = 'sim_'
+        if ('sim' in self.ds_specifics['data']):
+            dirs_rir = dirs['gerdata'] + '/RIR' + self.rir_ver 
+            dirs['rir'] = [ dirs_rir + '/simulate' + self.time_ver,]
 
-        # real-world experiments
-        else:
-            # ACE-DRR, T60, C50, ABS estimation
-            dirs['rir_real'] = dirs['gerdata'] + '/RIR/real/ACE'
-            dirs['rir_train_simu'] = dirs['gerdata'] + '/RIR/simu/train'
+            # ScrtchUP
+            dirs_pretrain = dirs['gerdata'] + '/SenSig-pretrain' + self.sig_ver
+            dirs_preval = dirs['gerdata'] + '/SenSig-preval' + self.sig_ver
+            dirs_pretest = dirs['gerdata'] + '/SenSig-test' + self.sig_ver
+            dirs['sensig_pretrain'] = [ dirs_pretrain + '/simulate' + self.time_ver ]
+            dirs['sensig_preval'] = [ dirs_preval + '/simulate' + self.time_ver ] 
+            dirs['sensig_pretest'] = [ dirs_pretest + '/simulate' + self.time_ver ]
 
-            # LOCATA-TDOA estimation
-            dirs['micsig_train_real'] = dirs['data'] + '/MicSig/real/LOCATA'
-            dirs['micsig_val_real'] = dirs['data'] + '/MicSig/real/LOCATA'
-            dirs['micsig_test_real'] = dirs['data'] + '/MicSig/real/LOCATA'
-            dirs['micsig_train_simu'] = dirs['gerdata'] + '/MicSig/simu_ds/train'
+            dirs['sensig_train'] = [dirs_train + '/simulate' + self.time_ver + 'R' + str(self.ds_nsimroom), ]
+            dirs['sensig_val'] = [ dirs_val + '/simulate' + self.time_ver + 'R20', ]
+            dirs['sensig_test'] = [ dirs_test + '/simulate' + self.time_ver +'R20', ]
+            data_model_flag = 'sim_' + self.time_ver 
 
-            data_model_flag = 'real_' + 'train' + str(self.ds_specifics['real_sim_ratio'][0]) + 'real'+ str(self.ds_specifics['real_sim_ratio'][1]) + 'sim_valreal'
+        if ('real' in self.ds_specifics['data']):
 
+            if ('locata' in self.ds_specifics['data']): 
+                dirs['sensig_train'] += [ dirs_train.replace(self.noise_flag, '') + '/LOCATA',
+                                          dirs_train + '/simulate' + self.time_ver + 'R1000', ] # add sim
+                dirs['sensig_val'] += [ dirs_val.replace(self.noise_flag, '') + '/LOCATA', 
+                                        dirs_val + '/simulate' + self.time_ver + 'R20', ] # add sim        
+                dirs['sensig_test'] += [ dirs_test.replace(self.noise_flag, '') + '/LOCATA',
+                                         dirs_test + '/simulate' + self.time_ver + 'R20', ]
+                dirs['rir'] = ['']
+
+            if 'ace' in self.ds_specifics['data']:
+                dirs_rir = dirs['gerdata'] + '/RIR_' + self.rir_ver 
+                dirs['rir'] = [ dirs_rir + '/ACE',
+                                dirs_rir + '/simulate' + self.time_ver, ] # add sim
+            data_model_flag = 'real_' + self.time_ver + '_train' + str(self.ds_specifics['real_sim_ratio'][0]) + 'real'+ str(self.ds_specifics['real_sim_ratio'][1]) + 'sim_valreal'
+
+        # data_model_flag = self.train_test_model
+ 
         # Experimental data
         dirs['log_pretrain'] = dirs['exp'] + '/pretrain/' + self.time
         

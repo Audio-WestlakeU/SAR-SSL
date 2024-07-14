@@ -277,6 +277,34 @@ def cross_validation_datadir(data_dir):
     return dirs
 
 
+def one_validation_datadir_simdata(data_dir, train_room_idx=[20,120], val_room_idx=[10,20], test_room_idx=[0,10]):
+    """ Divide data into train, validation and test sets without overlap
+        Args:   data_dir
+        Return: dirs -  dataset dictionary, 
+                        each element in list is a dataset dictionary, 
+                        each dictionary value is a list of room dirs
+    """
+    room_names = os.listdir(data_dir)
+
+    train_dir = []
+    val_dir = []
+    test_dir = []
+    for room_name in room_names:
+        if '.' not in room_name:
+            room_idx = int(room_name.split('Room')[-1])
+            if room_idx in range(train_room_idx[0], train_room_idx[1]):
+                train_dir += [data_dir + '/' + room_name]
+
+            if room_idx in range(val_room_idx[0], val_room_idx[1]):
+                val_dir += [data_dir + '/' + room_name]
+
+            if room_idx in range(test_room_idx[0], test_room_idx[1]):
+                test_dir += [data_dir + '/' + room_name]
+    dirs = {'train': train_dir, 'val': val_dir, 'test': test_dir}
+
+    return dirs
+
+
 def vis_TSNE(data, label):
     """ Visualize by TSNE
         Args:   data - (nins, dim)

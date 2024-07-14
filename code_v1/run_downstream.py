@@ -4,13 +4,6 @@ Reference:  Self-Supervised Learning of Spatial Acoustic Representation with Cro
 Author:     Bing Yang
 History:    2024-02 - Initial version
 Copyright Bing Yang
-ds-nsimroom: 2,4,8,16,32,64,128,256
-python run_downstream.py --ds-train --ds-trainmode finetune --simu-exp --ds-nsimroom 8 --ds-task DRR --time 07100035 --gpu-id 1, 
-python run_downstream.py --ds-train --ds-trainmode scratchLOW --simu-exp --ds-nsimroom 8 --ds-task DRR --time 07100035 --gpu-id 1, 
-python run_downstream.py --ds-train --ds-trainmode lineareval --simu-exp --ds-nsimroom 8 --ds-task DRR --time 07100035 --gpu-id 1, 
-
-python run_downstream.py --ds-train --ds-trainmode finetune --ds-task DRR --time 07100035 --gpu-id 1, 
-
 python run_downstream.py --ds-train --ds-trainmode finetune --ds-real-sim-ratio  1 0 --ds-task TDOA --time 05200250 --gpu-id 0, 
 python run_downstream.py --ds-train --ds-trainmode scratchLOW --ds-real-sim-ratio  1 0 --ds-task TDOA --time 05200200 --gpu-id 0, 
 
@@ -41,35 +34,37 @@ torch.backends.cudnn.allow_tf32 = True  # The flag below controls whether to all
 import numpy as np
 import copy
 import scipy.io
+from dataset import Parameter
 from tensorboardX import SummaryWriter
 import dataset as at_dataset
 import learner as at_learner
 import model as at_model
-from common.utils import set_seed, set_random_seed, get_nparams, get_FLOPs, save_config_to_file, vis_TSNE, cross_validation_datadir 
+from dataset import ArraySetup
+from common.utils import set_seed, set_random_seed, get_nparams, get_FLOPs, save_config_to_file, vis_TSNE, cross_validation_datadir, one_validation_datadir_simdata
 
 use_cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
 
 set_seed(args.seed)
-# args.ds_task=['T60']#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 # Acoustic setting parameters
-assert args.source_state == 'static', 'Source state model unrecognized~'
-snr_range = args.acoustic_setting['snr_range']
-nmic = args.acoustic_setting['nmic']
+noise_enable = args.noise_setting['noise_enable']
+snr_range = args.noise_setting['snr_range']
+noise_type_sim = args.noise_setting['noise_type']
+nmic = args.array_setting['nmic']
 speed = args.acoustic_setting['sound_speed']	
 fs = args.acoustic_setting['fs']
+ds_data = args.ds_specifics['data']
+real_sim_ratio = args.ds_specifics['real_sim_ratio']
 print(args.ds_specifics)
-
-seeds = {'train': int(args.seed+2e8), 'val': int(args.seed+1e8), 'test': int(args.seed+1)}
 
 if (args.ds_task == ['TDOA']):
 	T = 1.04
 else:
 	T = 4.112 
 print('duration: ', T , 's')
-selecting = at_dataset.Selecting(select_range=[0, int(T*fs)])
 
-# STFT parameters
+# STFT (for input) & segmenting (for output) parameters
 win_len = 512
 nfft = 512
 win_shift_ratio = 0.5
@@ -77,6 +72,17 @@ fre_used_ratio = 1
 nf = nfft//2
 nt = int((T * fs - win_len*(1-win_shift_ratio)) / (win_len*win_shift_ratio))
 print('nt, nf: ', nt, nf)
+if args.source_state == 'static':
+	seg_len = int(T*fs) 
+	seg_shift = 1
+elif args.source_state == 'mobile':
+	seg_fra_ratio = 12 	# one estimate per segment (namely seg_fra_ratio frames) 
+	seg_len = int(win_len*win_shift_ratio*(seg_fra_ratio+1)) # for win_shift_ratio = 0.5
+	seg_shift = int(win_len*win_shift_ratio*seg_fra_ratio) # for win_shift_ratio = 0.5
+else:
+	print('Source state model unrecognized~')
+selecting = at_dataset.Selectting(select_range=[0, int(T*fs)])
+segmenting = at_dataset.Segmenting(K=seg_len, step=seg_shift, window=None)
 
 # Network
 if args.ds_train | args.ds_test:
@@ -95,14 +101,34 @@ if (args.ds_train):
 
 	print('Training stage:', args.ds_trainmode)
 	num_stop_th = 1
+	val_seed = args.seed + 10000
+	test_seed = args.seed + 10001
 	
-	if args.simu_exp: # simulated data
+	if 'sim' in ds_data: # simulated data
+		noise_type = noise_type_sim
+		load_noise = False
 		print('Number of simulated rooms: ', args.ds_nsimroom)
-
+		sig_on_the_fly = False
+		if sig_on_the_fly:
+			train_room_range = [100, args.ds_nsimroom+100]
+			val_room_range = [50, 70]
+			test_room_range = [0, 20]
 	else: # real-world data
-		real_sim_ratio = args.ds_specifics['real_sim_ratio']
-		real_sim_ratios = {'train':real_sim_ratio, 'val':[1,0], 'test':[1,0]} 	# real 
-		# real_sim_ratios = {'train':[0,1], 'val':[0,1], 'test':[1,0] }   		# only sim 
+		addsim4real = True
+		if addsim4real:
+			real_sim_ratios = {'train':real_sim_ratio, 'val':[1,0] } 	# real 
+			# real_sim_ratios = {'train':[0,1], 'val':[0,1] }   		# only sim 
+
+		addvalmonitor = False
+		if addsim4real:
+			noise_type = noise_type_sim
+		else:
+			noise_type = ['']
+		load_noise = noise_enable
+		sig_on_the_fly = True
+		if addsim4real:
+			train_room_range = [1000, 2000]
+			val_room_range = [0, 100] 
 
 	if (args.ds_trainmode=='finetune') | (args.ds_trainmode=='lineareval') | (args.ds_trainmode=='scratchLOW') | (args.ds_trainmode=='scratchUP'):
 		log_dir = 'log_task_' + args.ds_trainmode
@@ -111,6 +137,7 @@ if (args.ds_train):
 	
 	# init_state_dict = net.state_dict()
 	init_state_dict = copy.deepcopy(net.state_dict())
+	args.ds_task = ['DRR']
 	for task in args.ds_task:
 		set_seed(args.seed)
 		task_time_dir = dirs['log_task'].replace('TASK', task)
@@ -127,16 +154,26 @@ if (args.ds_train):
 			nepoch_ensemble = 5
 		else:
 			data_num = {'train':num, 'val':1000, 'test':1000, 'test_large':4000}
+			if 'real' in ds_data:
+				if addvalmonitor:
+					stages = ['train', 'val', 'test', 'test_large', 'val_real', 'val_sim']
+					data_num = {'train':num, 'val':1000, 'test':1000, 'test_large':4000, 'val_real':1000, 'val_sim':1000}
 			test_bs = 16
 			early_stop_patience = 10 
 			smooth_alpha = 0.6
 			nepoch_ensemble = 5
 			
-		if args.simu_exp:
-			ntrials = args.ds_setting[task]['ntrial']
+		if 'sim' in ds_data:
+			if sig_on_the_fly:
+				room_dir_set = [one_validation_datadir_simdata(dirs['rir'][0], train_room_idx=train_room_range, val_room_idx=val_room_range, test_room_idx=test_room_range)]
+				ntrials = len(room_dir_set)
+			else:
+				ntrials = args.ds_setting[task]['ntrial']
 		else:
-			if task!='TDOA':
-				room_dir_set = cross_validation_datadir(dirs['rir_real'])
+			if sig_on_the_fly & (task!='TDOA'):
+				room_dir_set = cross_validation_datadir(dirs['rir'][0])
+				if addsim4real:
+					room_dir_addsim2train = one_validation_datadir_simdata(dirs['rir'][1], train_room_idx=train_room_range, val_room_idx=val_room_range, test_room_idx=[0,0]) # add sim
 				ntrials = len(room_dir_set)
 				# ntrials = 1 #LLSS  
 			else:
@@ -147,7 +184,8 @@ if (args.ds_train):
 
 		atts = dirs[log_dir].replace('TASK', task).replace('NUM', str(num)).replace(task_time_dir,'').split('-')
 		result_name = atts[0] + '-' + atts[1] + '-' + atts[2] + '-' + atts[3] +'-' + atts[-2] +'-' + atts[-1] +  '-lr_bs_tri_result.mat'
-		result_name_temporal = atts[0] + '-' + atts[1] + '-' + atts[2] + '-' + atts[3] +'-' + atts[-2] +'-' + atts[-1] +  '-lr_bs_tri_result_temporal.mat' 
+		result_name_temporal = atts[0] + '-' + atts[1] + '-' + atts[2] + '-' + atts[3] +'-' + atts[-2] +'-' + atts[-1] +  '-lr_bs_tri_result_temporal.mat'
+		# result_name_temporal  = atts[0] + '-' + atts[1] + '-' + atts[2] + '-' + atts[3] +'-' + atts[-2] +'-' + atts[-1] +  '-lr_bs_tri_result_temporal_lr10e-4.mat' # inff
 		if os.path.exists(task_time_dir+'/' + result_name_temporal) | os.path.exists(task_time_dir+'/' + result_name):
 			if os.path.exists(task_time_dir+'/' + result_name):
 				print(result_name  + ' exist~')
@@ -182,64 +220,111 @@ if (args.ds_train):
 						# Dataset 
 						return_data_ds = ['sig', task]
 						datasets = {}
-						# if (args.ds_trainmode=='scratchUP'):
-						# 	for stage in stages:
-						# 		datasets[stage] = at_dataset.FixMicSigDataset( 
-						# 			data_dir_list = dirs['sensig_pre'+stage.split('_')[0]],
-						# 			dataset_sz = data_num[stage],
-						# 			transforms = [selecting],
-						# 			return_data = return_data_ds)
-						# else:
-						if args.simu_exp: # simulated data, not on-the-fly (simulated data-all est tasks)
-							for stage in stages: 
-								if stage=='train':
-									data_dir = dirs['micsig_'+stage.split('_')[0]+'_simu'][trial_idx]
-								else:
-									data_dir = dirs['micsig_'+stage.split('_')[0]+'_simu'] 
+						if (args.ds_trainmode=='scratchUP'):
+							for stage in stages:
 								datasets[stage] = at_dataset.FixMicSigDataset( 
-									data_dir=data_dir, 
-									load_anno=True, 
-									dataset_sz=data_num[stage], 
-									transforms=[selecting]
-								)
-						else: # real-world data
-							if task!='TDOA': # real_world ACE- est tasks
+									data_dir_list = dirs['sensig_pre'+stage.split('_')[0]],
+									dataset_sz = data_num[stage],
+									transforms = [selecting, segmenting],
+									return_data = return_data_ds)
+						else:
+							if sig_on_the_fly & (('sim' in ds_data) | (('real' in ds_data)&(task!='TDOA'))): # real_world ACE- est tasks
 								for stage in stages:
-									real_rir_dir_list = room_dir_set[trial_idx][stage.split('_')[0]]
-									if stage=='train':
-										sim_rir_dir_list = dirs['rir_'+stage.split('_')[0]+'_simu']
+									sourceDataset = at_dataset.WSJ0Dataset(
+										path = dirs['sousig_'+stage.split('_')[0]], 
+										T = T,
+										fs = fs)
+									noiseDataset = at_dataset.NoiseDataset(
+										T = T, 
+										fs = fs, 
+										nmic = nmic, 
+										noise_type = Parameter(noise_type, discrete=True), 
+										noise_path = dirs['noisig_'+stage.split('_')[0]], 
+										c = speed)
+									if addsim4real:
+										eps = 10e-5
+										if (stage=='train') | (stage=='val'):
+											real_sim_ratio_list = real_sim_ratios[stage]
+											real_list = room_dir_set[trial_idx][stage.split('_')[0]]
+											sim_list = room_dir_addsim2train[stage.split('_')[0]]
+											data_dir_list = real_list + sim_list 
+											prob_ratio_list = [real_sim_ratio_list[0]/(len(real_list)+eps)*10000]*len(real_list) + [real_sim_ratio_list[1]/(len(sim_list)+eps)*10000]*len(sim_list)
+										elif (stage=='test') | (stage == 'test_large'):
+											real_list = room_dir_set[trial_idx][stage.split('_')[0]]
+											data_dir_list = room_dir_set[trial_idx][stage.split('_')[0]]
+											prob_ratio_list = None 
+										if addvalmonitor:
+											if (stage=='val_real'):
+												real_list = room_dir_set[trial_idx][stage.split('_')[0]]
+												data_dir_list = real_list +[]
+												prob_ratio_list = None
+											elif (stage=='val_sim'):
+												sim_list = room_dir_addsim2train[stage.split('_')[0]]
+												data_dir_list = sim_list+[]
+												prob_ratio_list = None
 									else:
-										sim_rir_dir_list = []
-									datasets[stage] = at_dataset.RandomMicSigFromRIRDataset(
-										real_rir_dir_list=real_rir_dir_list, 
-										sim_rir_dir_list=sim_rir_dir_list, 
-										src_dir=dirs['srcsig_'+stage.split('_')[0]],
-										dataset_sz=data_num[stage], 
-										T=T, 
-										fs=fs, 
-										c=speed,
-										nmic=nmic, 
-										snr_range=snr_range, 
-										real_sim_ratio=real_sim_ratios[stage.split('_')[0]], 
-										transforms=[selecting],
-										seed=seeds[stage.split('_')[0]]
-									)
-							else: # real-world LOCATA-TDOA est task
+										real_list = room_dir_set[trial_idx][stage.split('_')[0]]
+										data_dir_list = room_dir_set[trial_idx][stage.split('_')[0]]
+										prob_ratio_list = None  
+
+									rirDataset = at_dataset.RIRDataset(
+										data_dir_list = data_dir_list,
+										fs = fs,
+										data_prob_ratio_list=prob_ratio_list,
+										load_noise=load_noise,
+										load_noise_duration = T,
+										noise_type_specify=None)
+									datasets[stage] = at_dataset.RandomMicSigDataset_FromRIR(
+										sourceDataset = sourceDataset,
+										noiseDataset = noiseDataset,
+										SNR = Parameter(snr_range[0], snr_range[1]), 	
+										rirDataset = rirDataset,
+										dataset_sz = data_num[stage], 
+										transforms = [selecting, segmenting],
+										return_data = return_data_ds)
+
+							else: # not on-the-fly (simulated data-all est tasks, LOCATA-TDOA est task)
 								for stage in stages:
-									real_sig_dir = dirs['micsig_'+stage.split('_')[0]+'_real']
-									if stage=='train':
-										sim_sig_dir = dirs['micsig_'+stage.split('_')[0]+'_simu']
-									else:
-										sim_sig_dir = []
-									datasets[stage] = at_dataset.RandomMicSigDataset(
-										real_sig_dir=real_sig_dir, 
-										sim_sig_dir=sim_sig_dir, 
-										real_sim_ratio=real_sim_ratios[stage.split('_')[0]], 
-										load_anno=True, 
-										dataset_sz=data_num[stage], 
-										transforms=[selecting]
-									)
-									
+									sensig_dir_stage = 'sensig_'+stage.split('_')[0]
+									if ('sim' in ds_data): # simulated
+										
+										if (stage == 'train'):
+											dir_list = []
+											for dir in dirs[sensig_dir_stage]:
+												dir_list += [dir+'T'+ str(trial_idx)]
+										else:
+											dir_list = dirs[sensig_dir_stage]
+										datasets[stage] = at_dataset.FixMicSigDataset( 
+											data_dir_list = dir_list,
+											dataset_sz = data_num[stage],
+											transforms = [selecting, segmenting],
+											return_data = return_data_ds)  
+									else: # real_world LOCATA-TDOA
+										dir_list = []
+										if addsim4real:
+											if (stage == 'train') | (stage == 'val'):
+												dir_list = dirs[sensig_dir_stage]
+												real_sim_ratio_list = real_sim_ratios[stage]
+											elif (stage == 'test') | (stage == 'test_large'):
+												dir_list = [dirs[sensig_dir_stage][0]]
+												real_sim_ratio_list = None
+											if addvalmonitor:
+												if (stage=='val_real'):
+													dir_list = [dirs[sensig_dir_stage][0]]
+													real_sim_ratio_list = None
+												elif (stage == 'val_sim'):
+													dir_list = [dirs[sensig_dir_stage][1]]
+													real_sim_ratio_list = None
+										else:
+											dir_list = [dirs['sensig_'+stage.split('_')][0]]
+											real_sim_ratio_list = None
+										datasets[stage] = at_dataset.FixMicSigDataset( 
+											data_dir_list = dir_list,
+											dataset_sz = data_num[stage],
+											dataset_sz_ratio_list = real_sim_ratio_list,
+											transforms = [selecting, segmenting],
+											return_data = return_data_ds)  
+
 						# for i in range(3):
 						# 	from line_profiler import LineProfiler    
 						# 	lp = LineProfiler()
@@ -263,7 +348,11 @@ if (args.ds_train):
 						dataloader_val = torch.utils.data.DataLoader(dataset=datasets['val'], batch_size=test_bs, shuffle=False, **kwargs)
 						dataloader_test = torch.utils.data.DataLoader(dataset=datasets['test'], batch_size=test_bs, shuffle=False, **kwargs)
 						dataloader_test_large = torch.utils.data.DataLoader(dataset=datasets['test_large'], batch_size=test_bs, shuffle=False, **kwargs)
-		
+						if 'real' in ds_data:
+							if addvalmonitor:
+								dataloader_val_real = torch.utils.data.DataLoader(dataset=datasets['val_real'], batch_size=test_bs, shuffle=False, **kwargs)
+								dataloader_val_sim = torch.utils.data.DataLoader(dataset=datasets['val_sim'], batch_size=test_bs, shuffle=False, **kwargs)
+										
 						# Learner
 						net.load_state_dict(init_state_dict)
 						learner = at_learner.STFTLearner(net, win_len=win_len, win_shift_ratio=win_shift_ratio, nfft=nfft, fre_used_ratio=fre_used_ratio, fs=fs, task=task, ch_mode='M')
@@ -290,6 +379,12 @@ if (args.ds_train):
 						val_sm_writer = SummaryWriter(task_dir + '/val-smooth/', 'val')
 						test_writer = SummaryWriter(task_dir + '/test/', 'test')
 						test_sm_writer = SummaryWriter(task_dir + '/test-smooth/', 'test')
+						if 'real' in ds_data:
+							if addvalmonitor:
+								val_real_writer = SummaryWriter(task_dir + '/val-real/', 'val')
+								val_sim_writer = SummaryWriter(task_dir + '/val-sim/', 'val')
+								val_real_sm_writer = SummaryWriter(task_dir + '/val-real-smooth/', 'val')
+								val_sim_sm_writer = SummaryWriter(task_dir + '/val-sim-smooth/', 'val')
 
 						# Model Training
 						loss_val_list = []
@@ -300,14 +395,21 @@ if (args.ds_train):
 						for epoch in range(learner.start_epoch, nepoch+1, 1):
 							print('\nEpoch {}/{}:'.format(epoch, nepoch))
 
-							set_random_seed(seeds['train'])
+							set_random_seed(epoch)
 							loss_train, metric_train = learner.train_epoch(dataloader_train, lr=lr, epoch=epoch, return_metric=True)
 							nmetric = 1
 
-							set_random_seed(seeds['val'])
+							set_random_seed(val_seed)
 							loss_val, metric_val = learner.test_epoch(dataloader_val, return_metric=True)
 
-							set_random_seed(seeds['test'])
+							if 'real' in ds_data:
+								if addvalmonitor:
+									set_random_seed(val_seed)
+									loss_val_real, metric_val_real = learner.test_epoch(dataloader_val_real, return_metric=True)
+									set_random_seed(val_seed)
+									loss_val_sim, metric_val_sim = learner.test_epoch(dataloader_val_sim, return_metric=True)
+
+							set_random_seed(test_seed)
 							loss_test, metric_test = learner.test_epoch(dataloader_test, return_metric=True)
 
 							print('{} estimation, Val loss: {:.4f}, Val metric: {:.4f}'.format(task, loss_val, metric_val))
@@ -315,7 +417,13 @@ if (args.ds_train):
 								
 							loss_val_list += [loss_val]
 							loss_val_list_smooth = learner.smooth_data(data_list=loss_val_list, alpha=smooth_alpha)
-
+							if 'real' in ds_data:
+								if addvalmonitor:
+									loss_val_real_list += [loss_val_real]
+									loss_val_real_list_smooth = learner.smooth_data(data_list=loss_val_real_list, alpha=smooth_alpha)
+									loss_val_sim_list += [loss_val_sim]
+									loss_val_sim_list_smooth = learner.smooth_data(data_list=loss_val_sim_list, alpha=smooth_alpha)
+							
 							# Save model
 							stop_flag, is_best_epoch = learner.early_stopping(current_score=loss_val_list_smooth[-1]*(-1), patience=early_stop_patience)
 							learner.save_checkpoint(epoch=epoch, checkpoints_dir=task_dir, is_best_epoch=is_best_epoch, save_extra_hist=True)
@@ -327,14 +435,23 @@ if (args.ds_train):
 							val_writer.add_scalar('loss', loss_val, epoch)
 							val_sm_writer.add_scalar('loss', loss_val_list_smooth[-1], epoch)
 							test_writer.add_scalar('loss', loss_test, epoch)
-							
+							if 'real' in ds_data:
+								if addvalmonitor:
+									val_real_writer.add_scalar('loss', loss_val_real, epoch)
+									val_sim_writer.add_scalar('loss', loss_val_sim, epoch)
+									val_real_sm_writer.add_scalar('loss', loss_val_real_list_smooth[-1], epoch)
+									val_sim_sm_writer.add_scalar('loss', loss_val_sim_list_smooth[-1], epoch)
 							if nmetric == 1:
 								train_writer.add_scalar('metric', metric_train, epoch)
 								val_writer.add_scalar('metric', metric_val, epoch)
 								test_writer.add_scalar('metric', metric_test, epoch)
-							train_writer.add_scalar('lr', lr, epoch)
+								if 'real' in ds_data:
+									if addvalmonitor:
+										val_real_writer.add_scalar('metric', metric_val_real, epoch)
+										val_sim_writer.add_scalar('metric', metric_val_sim, epoch)
+							test_writer.add_scalar('lr', lr, epoch)
 							if epoch==1:
-								train_writer.add_scalar('nparam', nparam_sum, epoch)
+								test_writer.add_scalar('nparam', nparam_sum, epoch)
 							if stop_flag: ## inff comment
 								cnt_stop += 1
 								if cnt_stop <= num_stop_th:
@@ -353,9 +470,9 @@ if (args.ds_train):
 						learner.ensembling(checkpoints_dir=task_dir, epochs=epochs)
 
 						# Model validation
-						set_random_seed(seeds['test'])
+						set_random_seed(test_seed)
 						best_loss_test, best_metric_test = learner.test_epoch(dataloader_test_large, return_metric=True)
-						set_random_seed(seeds['val'])
+						set_random_seed(val_seed)
 						best_loss_val, best_metric_val = learner.test_epoch(dataloader_val, return_metric=True)
 						print('{} estimation, Test loss: {:.4f}, Test metric: {:.4f}'.format(task, best_loss_test, best_metric_test))
 						print('{} estimation, Val loss: {:.4f}, Val metric: {:.4f}'.format(task, best_loss_val, best_metric_val))
@@ -400,6 +517,7 @@ if (args.ds_train):
 		# Save final results and remove temporal results
 		atts = task_dir.replace(task_time_dir,'').split('-')
 		result_name = atts[0] + '-' + atts[1] + '-' + atts[2] + '-' + atts[3] +'-' + atts[-2] +'-' + atts[-1] +  '-lr_bs_tri_result.mat' 
+		# result_name = atts[0] + '-' + atts[1] + '-' + atts[2] + '-' + atts[3] +'-' + atts[-2] +'-' + atts[-1] +  '-lr_bs_tri_result_lr10e-4.mat'  # inff
 		scipy.io.savemat(task_time_dir+'/' + result_name, {
 							'val_losses':val_losses, 'val_metrics':val_metrics, 
 							'test_losses':test_losses, 'test_metrics':test_metrics, 
@@ -421,9 +539,30 @@ if (args.ds_test):
 	########################
 
 	test_bs = 16
-	if args.simu_exp: # simulated data
+	train_seed = args.seed
+	test_seed = args.seed+10001
+
+	if 'sim' in ds_data: # simulated data
+		noise_type = noise_type_sim
+		load_noise = False
 		print('Number of simulated rooms: ', args.ds_nsimroom)
- 
+		sig_on_the_fly = False
+		if sig_on_the_fly:
+			train_room_range = [1000, args.ds_nsimroom+1000]
+			val_room_range = [50, 70]
+			test_room_range = [0, 20]
+	else: # real-world data
+		load_noise = noise_type_sim
+		test_real = True
+		test_real = False
+		if not test_real:
+			train_room_range = [1000, 2000] #sim
+			test_room_range = [0, 20] #sim
+			noise_type = noise_type_sim
+		else:
+			noise_type = ['']
+		sig_on_the_fly = True
+
 	if (args.ds_trainmode=='finetune') | (args.ds_trainmode=='lineareval') | (args.ds_trainmode=='scratchLOW') | (args.ds_trainmode=='scratchUP'):
 		log_dir = 'log_task_' + args.ds_trainmode
 	else:
@@ -448,9 +587,9 @@ if (args.ds_test):
 		
 		if (test_mode == 'cal_metric') | (test_mode == 'cal_avg'):
 			if (args.ds_trainmode=='scratchUP') :
-				if args.simu_exp:
+				if 'sim' in ds_data:
 					data_num = {'train':num, 'test':4000}
-				else:
+				elif 'real' in ds_data:
 					data_num = {'train':1, 'test':4000}
 			else:
 				data_num = {'train':num, 'test':4000} 
@@ -466,11 +605,18 @@ if (args.ds_test):
 			set_seed(args.seed)
 			print(tt,  'nepoch=',nepoch, 'num=',num, 'lr=',lr_init, 'bs=', bs)
 
-			if args.simu_exp:
-				ntrials = args.ds_setting[task]['ntrial']
+			if 'sim' in ds_data:
+				if sig_on_the_fly:
+					room_dir_set = [one_validation_datadir_simdata(dirs['rir'][0], train_room_idx=train_room_range, val_room_idx=val_room_range, test_room_idx=test_room_range)]
+					ntrials = len(room_dir_set)
+				else:
+					ntrials = args.ds_setting[task]['ntrial']
 			else:
-				if tt!='TDOA': 
-					room_dir_set = cross_validation_datadir(dirs['rir'][0])
+				if sig_on_the_fly & (tt!='TDOA'): 
+					if test_real:
+						room_dir_set = cross_validation_datadir(dirs['rir'][0])
+					else:
+						room_dir_set = [one_validation_datadir_simdata(dirs['rir'][1], train_room_idx=train_room_range, val_room_idx=[0,0], test_room_idx=test_room_range)]
 					ntrials = len(room_dir_set)
 				else:
 					ntrials = 1
@@ -501,56 +647,106 @@ if (args.ds_test):
 				return_data_ds = ['sig', tt]	
 				datasets = {}
 				stages = ['train', 'test']
-				
-				if args.simu_exp: # simulated data, not on-the-fly (simulated data-all est tasks)
-					for stage in stages:
-						if stage=='train':
-							data_dir = dirs['micsig_'+stage.split('_')[0]+'_simu'][trial_idx]
+				if (args.ds_trainmode=='scratchUP'):
+					if 'sim' in ds_data:
+						for stage in stages:
+							datasets[stage] = at_dataset.FixMicSigDataset( 
+								data_dir_list = dirs['sensig_pre'+stage.split('_')[0]],
+								dataset_sz = data_num[stage],
+								transforms = [selecting, segmenting],
+								return_data = return_data_ds,
+								)	
+					elif 'real' in ds_data:
+						if sig_on_the_fly&(tt!='TDOA'):
+							for stage in stages:
+								sourceDataset = at_dataset.WSJ0Dataset(
+									path = dirs['sousig_'+stage.split('_')[0]], 
+									T = T,
+									fs = fs)
+								noiseDataset = at_dataset.NoiseDataset(
+									T = T, 
+									fs = fs, 
+									nmic = nmic, 
+									noise_type = Parameter(noise_type, discrete=True), 
+									noise_path = dirs['noisig_'+stage.split('_')[0]], 
+									c = speed)
+								rirDataset = at_dataset.RIRDataset(
+									data_dir_list = room_dir_set[trial_idx][stage.split('_')[0]],
+									fs = fs,
+									load_noise=load_noise,
+									load_noise_duration = T,
+									noise_type_specify=None)
+								datasets[stage] = at_dataset.RandomMicSigDataset_FromRIR(
+									sourceDataset = sourceDataset,
+									noiseDataset = noiseDataset,
+									SNR = Parameter(snr_range[0], snr_range[1]), 	
+									rirDataset = rirDataset,
+									dataset_sz = data_num[stage], 
+									transforms = [selecting, segmenting],
+									return_data = return_data_ds)
 						else:
-							data_dir = dirs['micsig_'+stage.split('_')[0]+'_simu']
-						datasets[stage] = at_dataset.FixMicSigDataset( 
-							data_dir=data_dir, 
-							load_anno=True, 
-							dataset_sz=data_num[stage], 
-							transforms=[selecting]
-						)
-				else: # real-world data
-					if task!='TDOA': # real_world ACE- est tasks
+							for stage in stages:
+								sensig_dir_stage = 'sensig_'+stage.split('_')[0]
+								datasets[stage] = at_dataset.FixMicSigDataset( 
+									data_dir_list = dirs[sensig_dir_stage],
+									dataset_sz = data_num[stage],
+									transforms = [selecting, segmenting],
+									return_data = return_data_ds)		
+				else:
+					if sig_on_the_fly & (('sim' in ds_data) | (('real' in ds_data)&(tt!='TDOA'))):
 						for stage in stages:
-							real_rir_dir_list = room_dir_set[trial_idx][stage.split('_')[0]]
-							if stage=='train':
-								sim_rir_dir_list = dirs['rir_'+stage.split('_')[0]+'_simu']
-							else:
-								sim_rir_dir_list = []
-							datasets[stage] = at_dataset.RandomMicSigFromRIRDataset(
-								real_rir_dir_list=real_rir_dir_list, 
-								sim_rir_dir_list=sim_rir_dir_list, 
-								src_dir=dirs['srcsig_'+stage.split('_')[0]],
-								dataset_sz=data_num[stage], 
-								T=T, 
-								fs=fs, 
-								c=speed,
-								nmic=nmic, 
-								snr_range=snr_range, 
-								real_sim_ratio=real_sim_ratios[stage], 
-								transforms=[selecting],
-								seed=seeds[stage]
-							)
-					else: # real-world LOCATA-TDOA est task
+							sourceDataset = at_dataset.WSJ0Dataset(
+								path = dirs['sousig_'+stage.split('_')[0]], 
+								T = T,
+								fs = fs)
+							noiseDataset = at_dataset.NoiseDataset(
+								T = T, 
+								fs = fs, 
+								nmic = nmic, 
+								noise_type = Parameter(noise_type, discrete=True), 
+								noise_path = dirs['noisig_'+stage.split('_')[0]], 
+								c = speed)
+							rirDataset = at_dataset.RIRDataset(
+								data_dir_list = room_dir_set[trial_idx][stage.split('_')[0]],
+								fs = fs,
+								load_noise=load_noise,
+								load_noise_duration = T,
+								noise_type_specify=None)
+							datasets[stage] = at_dataset.RandomMicSigDataset_FromRIR(
+								sourceDataset = sourceDataset,
+								noiseDataset = noiseDataset,
+								SNR = Parameter(snr_range[0], snr_range[1]), 	
+								rirDataset = rirDataset,
+								dataset_sz = data_num[stage], 
+								transforms = [selecting, segmenting],
+								return_data = return_data_ds)
+					else: # not on-the-fly (simulated data-all est tasks, LOCATA-TDOA est task)
 						for stage in stages:
-							real_sig_dir = dir['micsig_'+stage.split('_')[0]+'_real']
-							if stage=='train':
-								sim_sig_dir = dir['micsig_'+stage.split('_')[0]+'_simu']
-							else:
-								sim_sig_dir = []
-							datasets[stage] = at_dataset.RandomMicSigDataset(
-								real_sig_dir=real_sig_dir, 
-								sim_sig_dir=sim_sig_dir, 
-								real_sim_ratio=real_sim_ratios[stage], 
-								load_anno=True, 
-								dataset_sz=data_num[stage], 
-								transforms=[selecting]
-							)
+							sensig_dir_stage = 'sensig_'+stage.split('_')[0]
+							if ('sim' in ds_data):  # simulated
+								if  (stage == 'train'):
+									dir_list = []
+									for dir in dirs[sensig_dir_stage]:
+										dir_list += [dir+'T'+ str(trial_idx)]
+								else:
+									dir_list = dirs[sensig_dir_stage]
+								datasets[stage] = at_dataset.FixMicSigDataset( 
+									data_dir_list = dir_list,
+									dataset_sz = data_num[stage],
+									transforms = [selecting, segmenting],
+									return_data = return_data_ds,
+									)  
+							else:  # real_world LOCATA-TDOA
+								if test_real:
+									dir_list = [dirs[sensig_dir_stage][0]]
+								else:
+									dir_list = [dirs[sensig_dir_stage][1]]
+								datasets[stage] = at_dataset.FixMicSigDataset( 
+									data_dir_list = dir_list,
+									dataset_sz = data_num[stage],
+									transforms = [selecting, segmenting],
+									return_data = return_data_ds,
+									) 
 								
 				kwargs = {'num_workers': args.workers, 'pin_memory': True} if use_cuda else {}
 				dataloader_train = torch.utils.data.DataLoader(dataset=datasets['train'], batch_size=test_bs, shuffle=False, **kwargs)
@@ -569,11 +765,11 @@ if (args.ds_test):
 				if (test_mode == 'cal_metric'):
 					if (args.ds_trainmode=='scratchUP'):
 						learner.load_checkpoint_best(checkpoints_dir=task_dir, as_all_state=True) # Load best checkpoints 
-						set_random_seed(seeds['test'])
+						set_random_seed(test_seed)
 						loss_test[trial_idx],  metric_test[trial_idx] = learner.test_epoch(dataloader_test, return_metric=True, return_vis=False)
 					else:
 						learner.load_checkpoint_ensemble(checkpoints_dir=task_dir) 
-						set_random_seed(seeds['test'])
+						set_random_seed(test_seed)
 						loss_test[trial_idx], metric_test[trial_idx] = learner.test_epoch(dataloader_test, return_metric=True, return_vis=False)
 
 					print('{} estimation, Test loss: {:.4f}, Test metric: {:.4f}'.format(tt, loss_test[trial_idx], metric_test[trial_idx]))
@@ -582,21 +778,21 @@ if (args.ds_test):
 					
 					learner.load_checkpoint_ensemble(checkpoints_dir=task_dir)  
 
-					set_random_seed(seeds['train'])
+					set_random_seed(train_seed)
 					_, _, vis_train = learner.test_epoch(dataloader_train, return_metric=True, return_vis=True)
 
-					set_random_seed(seeds['test'])
+					set_random_seed(test_seed)
 					_, _, vis_test = learner.test_epoch(dataloader_test, return_metric=True, return_vis=True)
 
-					if ((args.ds_trainmode=='finetune') | (args.ds_trainmode=='lineareval')  | (args.ds_trainmode=='scratchLOW')) & args.simu_exp:
+					if ((args.ds_trainmode=='finetune') | (args.ds_trainmode=='lineareval')  | (args.ds_trainmode=='scratchLOW')) & ('sim' in ds_data):
 						
-						set_random_seed(seeds['train'])
+						set_random_seed(train_seed)
 						vis_train, data_vis_train = vis_TSNE(data=vis_train['embed'].cpu().detach().numpy(), label=vis_train['label'].cpu().detach().numpy())
 						vis_train.savefig(task_dir.replace(task_dir.split('/')[-1], 'test_result/tsne_vis_train_'+task_dir.split('/')[-1]) + '.png')
 						scipy.io.savemat(task_dir.replace(task_dir.split('/')[-1], 'test_result/tsne_vis_train_'+task_dir.split('/')[-1]) + '.mat', 
 								{'data': data_vis_train['data'], 'label':data_vis_train['label']})
 						
-						set_random_seed(seeds['test'])
+						set_random_seed(test_seed)
 						vis_test, data_vis_test = vis_TSNE(data=vis_test['embed'].cpu().detach().numpy(), label=vis_test['label'].cpu().detach().numpy())
 						vis_test.savefig(task_dir.replace(task_dir.split('/')[-1], 'test_result/tsne_vis_test_'+task_dir.split('/')[-1]) + '.png')
 						scipy.io.savemat(task_dir.replace(task_dir.split('/')[-1], 'test_result/tsne_vis_test_'+task_dir.split('/')[-1]) + '.mat', 

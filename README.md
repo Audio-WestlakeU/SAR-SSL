@@ -195,8 +195,8 @@ A python implementation of “**<a href="https://arxiv.org/abs/2312.00476" targe
   ```
   # ds-trainmode = finetune or scratchLOW
   # ds-real-sim-ratio = 1 1, 1 0 or 0 1
-  python run.py --ds-train --ds-trainmode finetune --ds-real-sim-ratio 1 1 --ds-task TDOA ---time [*] --gpu-id [*]
-  python run.py --ds-train --ds-trainmode finetune --ds-real-sim-ratio 1 1 --ds-task DRR T60 C50 ABS--time [*] --gpu-id [*]
+  python run_downstream.py --ds-train --ds-trainmode finetune --ds-real-sim-ratio 1 1 --ds-task TDOA --time [*] --gpu-id [*]
+  python run_downstream.py --ds-train --ds-trainmode finetune --ds-real-sim-ratio 1 1 --ds-task DRR T60 C50 ABS --time [*] --gpu-id [*]
 
   ```
 + **Evaluation**
@@ -216,8 +216,8 @@ A python implementation of “**<a href="https://arxiv.org/abs/2312.00476" targe
   ```
   # ds-trainmode = finetune or scratchLOW
   # ds-real-sim-ratio = 1 1, 1 0 or 0 1
-  python run_downstream.py --ds-test --ds-trainmode finetune -ds-real-sim-ratio 1 1 --ds-task TDOA --time [*] --gpu-id [*] 
-  python run_downstream.py --ds-test --ds-trainmode finetune -ds-real-sim-ratio 1 1 --ds-task DRR T60 C50 ABS --time [*] --gpu-id [*] 
+  python run_downstream.py --ds-test --ds-trainmode finetune --ds-real-sim-ratio 1 1 --ds-task TDOA --time [*] --gpu-id [*] 
+  python run_downstream.py --ds-test --ds-trainmode finetune --ds-real-sim-ratio 1 1 --ds-task DRR T60 C50 ABS --time [*] --gpu-id [*] 
   ```
   - Read downstream results (MAEs of TDOA, DRR, T60, C50, SNR, ABS estimation) from saved mat files
   ```
