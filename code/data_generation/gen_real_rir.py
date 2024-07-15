@@ -1,10 +1,14 @@
-""" Generate real-world RIRs
+""" 
+    Generate real-world mesured room impulse responses (RIRs) and noise signals
         source_state='static', num_source=1, nmic =2
         data dir: dataset_name/room_name/array_name/
         data name: 	rir- 	SP*-*_MP*-a-b.npz
                     noise-	(SP*-*)_MP*-a-b_type.wav (a,b denotes the indexes of microphones)
                     rir and noise are matched according to MP*-a-b
-    Usage: 	Need to specify data-id, data-type(, data-op)
+    
+    Example:
+        python gen_real_rir.py --dataset DCASE dEchorate BUTReverb ACE --data_type rir noise --read_dir ../../../data/RIR --save_dir ../../data/RIR/real
+        python gen_real_rir.py --dataset Mesh MIR --data_type rir --read_dir ../../../data/RIR --save_dir ../../data/RIR/real
 """
 
 import os
@@ -1276,6 +1280,3 @@ if __name__ == '__main__':
                 data_num = rirDataset.gen_noise()
             print(data_num)
 
-
-    # python gen_real_rir.py --dataset DCASE dEchorate BUTReverb ACE --data_type rir noise --read_dir /data/home/yangbing/data/RIR/ --save_dir /data/home/yangbing/SAR-SSL/data/RIR/real/
-    # python gen_real_rir.py --dataset Mesh MIR --data_type rir --read_dir /data/home/yangbing/data/RIR/ --save_dir /data/home/yangbing/SAR-SSL/data/RIR/real/

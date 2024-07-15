@@ -1132,7 +1132,7 @@ class FixMicSigDataset(Dataset):
         # print(idx,len(self.data_paths))
         if idx==None:
             idx = random.randint(0, len(self.data_paths)-1)
-        # print(idx,'-')
+ 
         assert idx<len(self.data_paths), [idx ,len(self.data_paths)]
         sig_path = self.data_paths[idx]
         acous_path = sig_path.replace('wav','npz')

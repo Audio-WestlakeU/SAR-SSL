@@ -1,3 +1,16 @@
+"""
+    Generate simulated room impulse responses and microphone signals for training and test 
+
+    Examples: 
+        python gen_simu.py --mode sig --stage pretrain --data_num 512000 --src_dir ../../../data/SrcSig/wsj0 --save_to ../../data/MicSig/simu --gpus [0,1]
+        python gen_simu.py --mode sig --stage preval --data_num 4000 --src_dir ../../../data/SrcSig/wsj0 --save_to ../../data/MicSig/simu --gpus [0]
+        python gen_simu.py --mode sig --stage pretest --data_num 4000 --src_dir ../../../data/SrcSig/wsj0 --save_to ../../data/MicSig/simu --gpus [0]
+        python gen_simu.py --mode sig --stage pretest_ins_T1000 --data_num 10 --room_sz_range [[5,10],[3,6],[2.5,3]] --T60_range [1.0,1.0] --snr_range [20,20] --src_dir ../../../data/SrcSig/wsj0 --save_to ../../data/MicSig/simu --gpus [0]
+
+        # python gen_simu.py --mode rir --stage train --data_num 1000 --save_to ../../data/RIR/simu --gpus [0,1]
+        # python gen_simu.py --mode rir --stage val --data_num 20 --save_to ../../data/RIR/simu --gpus [0,1]
+        # python gen_simu.py --mode rir --stage test --data_num 20 --save_to ../../data/RIR/simu --gpus [0,,1,]
+"""
 import os
 cpu_num = 8*5
 os.environ["OMP_NUM_THREADS"] = str(cpu_num)
@@ -390,14 +403,4 @@ if __name__ == '__main__':
         # generate configuration & microphone signals
         GenerateRandomMicSig(**args_for_generate_sig_cfg)
 
-    # Examples: 
-    # python gen_simu.py --mode sig --stage pretrain --data_num 512000 --save_to /data/home/yangbing/SAR-SSL/data/MicSig/simu --src_dir /data/home/yangbing/data/SrcSig/wsj0 --gpus [0,1,2,3]
-    # python gen_simu.py --mode sig --stage preval --data_num 4000 --save_to /data/home/yangbing/SAR-SSL/data/MicSig/simu  --src_dir /data/home/yangbing/data/SrcSig/wsj0 --gpus [4,5]
-    # python gen_simu.py --mode sig --stage pretest --data_num 4000 --save_to /data/home/yangbing/SAR-SSL/data/MicSig/simu  --src_dir /data/home/yangbing/data/SrcSig/wsj0 --gpus [6,7]
-    # python gen_simu.py --mode sig --stage pretest_ins_T1000 --data_num 10 --room_sz_range [[5,10],[3,6],[2.5,3]] --T60_range [1.0,1.0] --snr_range [20,20] --save_to /data/home/yangbing/SAR-SSL/data/MicSig/simu  --src_dir /data/home/yangbing/data/SrcSig/wsj0 --gpus [6,7]
-
-
-    ## python gen_simu.py --mode rir --stage train --data_num 1000 --save_to /data/home/yangbing/SAR-SSL/data/RIR/simu  --gpus [0,1]
-    ## python gen_simu.py --mode rir --stage val --data_num 20 --save_to /data/home/yangbing/SAR-SSL/data/RIR/simu  --gpus [0,1]
-    ## python gen_simu.py --mode rir --stage test --data_num 20 --save_to /data/home/yangbing/SAR-SSL/data/RIR/simu  --gpus [0,,1,]
 

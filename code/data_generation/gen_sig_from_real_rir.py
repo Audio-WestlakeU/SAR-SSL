@@ -1,5 +1,12 @@
-import os
+"""
+    Generate microphone signals from real-world room impulse responses (RIRs)
 
+    Examples:
+        python gen_sig_from_real_rir.py --stage pretrain --dataset Mesh MIR DCASE dEchorate BUTReverb ACE --src_dir ../../../data/SrcSig/wsj0 --rir_dir ../../../data/RIR/real --save_dir ../../data/MicSig/real 
+        python gen_sig_from_real_rir.py --stage preval --dataset DCASE BUTReverb --src_dir ../../../data/SrcSig/wsj0 --rir_dir ../../../data/RIR/real --save_dir ../../data/MicSig/real  
+"""
+   
+import os
 cpu_num = 8*5
 os.environ["OMP_NUM_THREADS"] = str(cpu_num) 
 os.environ['OPENBLAS_NUM_THREADS'] = str(cpu_num)
@@ -64,8 +71,7 @@ class RIRDataset(Dataset):
             rir_attrs = str(rir_file).split('/')
             mic_attr_match = rir_attrs[-1].split('_')[1].split('.')[0]
             noise_dir = str(rir_file.parent).replace(rir_attrs[-4], rir_attrs[-4]+'_noise')
-            # noise_files = self.match(noise_dir, None, mic_attr_match)
-
+            # noise_files = self.__match(noise_dir, None, mic_attr_match)
             noise_files = list(Path(noise_dir).rglob(f"*_{mic_attr_match}*.wav"))
             if noise_files == []:
                 nmic = rir.shape[1]
@@ -92,43 +98,43 @@ class RIRDataset(Dataset):
 
         return return_data
     
-    @cache
-    def _search_files(self, dir, file_extension):
-        # paths = list(Path(dir).rglob(f"*.{file_extension}"))
-        # return [str(p) for p in paths]
+    # @cache
+    # def _search_files(self, dir, file_extension):
+    #     # paths = list(Path(dir).rglob(f"*.{file_extension}"))
+    #     # return [str(p) for p in paths]
 
-        paths = []
-        for item in os.listdir(dir):
-            if os.path.isdir( os.path.join(dir, item) ):
-                paths += self._search_files( os.path.join(dir, item), file_extension )
-            elif item.split(".")[-1] == file_extension:
-                paths += [os.path.join(dir, item)]
-        return paths
+    #     paths = []
+    #     for item in os.listdir(dir):
+    #         if os.path.isdir( os.path.join(dir, item) ):
+    #             paths += self._search_files( os.path.join(dir, item), file_extension )
+    #         elif item.split(".")[-1] == file_extension:
+    #             paths += [os.path.join(dir, item)]
+    #     return paths
 
-    @cache
-    def _match(self, noise_dir,noise_type_specify,mic_attrs_match):
-        # if noise_type_specify is None:
-        #     paths = list(Path(noise_dir).rglob(f"*_{mic_attrs_match}*.wav"))   
-        # else:
-        #     match_paths = []
-        #     for noise_type in noise_type_specify:
-        #         paths = list(Path(noise_dir).rglob(f"*_{mic_attrs_match}_{noise_type}.wav"))
-        # match_paths = [str(p) for p in paths]
+    # @cache
+    # def _match(self, noise_dir,noise_type_specify,mic_attrs_match):
+    #     # if noise_type_specify is None:
+    #     #     paths = list(Path(noise_dir).rglob(f"*_{mic_attrs_match}*.wav"))   
+    #     # else:
+    #     #     match_paths = []
+    #     #     for noise_type in noise_type_specify:
+    #     #         paths = list(Path(noise_dir).rglob(f"*_{mic_attrs_match}_{noise_type}.wav"))
+    #     # match_paths = [str(p) for p in paths]
 
-        noise_paths = self._search_files(dir=noise_dir, file_extension='wav')
+    #     noise_paths = self._search_files(dir=noise_dir, file_extension='wav')
         
-        match_paths = []
-        for noise_path in noise_paths:
-            wav_name = noise_path.split('/')[-1]
-            noise_mic = wav_name.split('_')[1]
-            noise_type = wav_name.split('_')[-1].split('.')[0]
-            if noise_mic == mic_attrs_match:
-                if noise_type_specify is None:
-                    match_paths += [noise_path]
-                else:
-                    if noise_type in noise_type_specify:
-                        match_paths += [noise_path] 
-        return match_paths     
+    #     match_paths = []
+    #     for noise_path in noise_paths:
+    #         wav_name = noise_path.split('/')[-1]
+    #         noise_mic = wav_name.split('_')[1]
+    #         noise_type = wav_name.split('_')[-1].split('.')[0]
+    #         if noise_mic == mic_attrs_match:
+    #             if noise_type_specify is None:
+    #                 match_paths += [noise_path]
+    #             else:
+    #                 if noise_type in noise_type_specify:
+    #                     match_paths += [noise_path] 
+    #     return match_paths     
 
     def rir_conv_src(self, rir, src_signal, gpuConv=False):
         ''' rir : (npoint,nch,nsam,nsource)
@@ -319,19 +325,10 @@ if __name__ == '__main__':
         seed = 2e6
     elif args.stage == 'pretest':
         seed = 3e6
-    # elif args.stage == 'train':
-    #     seed = 4e6
-    # elif args.stage == 'val':
-    #     seed = 5e6
-    # elif args.stage == 'test':
-    #     seed = 6e6
 
     dataset_list = 	   			['DCASE', 	'MIR', 		'Mesh', 	'dEchorate','BUTReverb','ACE'       ]
     sig_num_list = {'pretrain': [10240*10, 	10240*10, 	10240*10, 	10240*10,	10240*10,	10240*10,   ], 
                     'preval':	[2560, 	    2560,		2560, 		2560,		2560,		2560,		], 		 
-                    # 'train':	[10240*2,	10240*2, 	10240*2,	10240*2, 	10240*2,	10240*2,	],	 
-                    # 'val': 		[2560, 		2560, 		2560,		2560, 		2560,		2560,		],		
-                    # 'test': 	[2560, 		2560, 		2560,		2560, 		2560,		2560,		],
                     }	
 
     for dataset_name in args.dataset:
@@ -432,6 +429,3 @@ if __name__ == '__main__':
         pbar = tqdm.tqdm(range(0, sig_num), desc='generating signals')
         for mic_sig in (dataloader):
             pbar.update(1)
-
-        # python gen_sig_from_real_rir.py --stage pretrain --dataset DCASE Mesh MIR dEchorate BUTReverb ACE --src_dir /data/home/yangbing/data/SrcSig/wsj0 --rir_dir /data/home/yangbing/SAR-SSL/data/RIR/real --save_dir /data/home/yangbing/SAR-SSL/data/MicSig/real 
-        # python gen_sig_from_real_rir.py --stage preval --dataset DCASE BUTReverb --src_dir /data/home/yangbing/data/SrcSig/wsj0 --rir_dir /data/home/yangbing/SAR-SSL/data/RIR/real --save_dir /data/home/yangbing/SAR-SSL/data/MicSig/real  

@@ -1,21 +1,19 @@
 """
-Run training and test processes for self-supervised learning of spatial acoustic representation
-Reference:  Self-Supervised Learning of Spatial Acoustic Representation with Cross-Channel Signal Reconstruction and Multi-Channel Conformer
-Author:     Bing Yang
-History:    2024-02 - Initial version
-Copyright Bing Yang
-ds-nsimroom: 2,4,8,16,32,64,128,256
-python run_downstream.py --ds-train --ds-trainmode finetune --simu-exp --ds-nsimroom 8 --ds-task DRR --time 07100035 --gpu-id 1, 
-python run_downstream.py --ds-train --ds-trainmode scratchLOW --simu-exp --ds-nsimroom 8 --ds-task DRR --time 07100035 --gpu-id 1, 
-python run_downstream.py --ds-train --ds-trainmode lineareval --simu-exp --ds-nsimroom 8 --ds-task DRR --time 07100035 --gpu-id 1, 
+	Run training and test processes for self-supervised learning of spatial acoustic representation
+	Reference:  Self-Supervised Learning of Spatial Acoustic Representation with Cross-Channel Signal Reconstruction and Multi-Channel Conformer
+	Author:     Bing Yang
+	History:    2024-07 - Initial version
+	Copyright Bing Yang
 
-python run_downstream.py --ds-train --ds-trainmode finetune --ds-task DRR --time 07100035 --gpu-id 1, 
+	Examples:
+		# --ds-nsimroom: 2,4,8,16,32,64,128,256
+		# --ds-task: TDOA DRR T60 C50 ABS
+		python run_downstream.py --ds-train --ds-trainmode finetune --simu-exp --ds-nsimroom 8 --ds-task TDOA --time * --gpu-id 0, 
+		python run_downstream.py --ds-train --ds-trainmode scratchLOW --simu-exp --ds-nsimroom 8 --ds-task TDOA --time * --gpu-id 0, 
+		python run_downstream.py --ds-train --ds-trainmode lineareval --simu-exp --ds-nsimroom 8 --ds-task TDOA --time * --gpu-id 0, 
 
-python run_downstream.py --ds-train --ds-trainmode finetune --ds-real-sim-ratio  1 0 --ds-task TDOA --time 05200250 --gpu-id 0, 
-python run_downstream.py --ds-train --ds-trainmode scratchLOW --ds-real-sim-ratio  1 0 --ds-task TDOA --time 05200200 --gpu-id 0, 
-
-python run_downstream.py --ds-train --ds-trainmode finetune --ds-real-sim-ratio  1 0 --ds-task TDOA --time 05200250inf --gpu-id 0, --work-dir "/home/yangbing/image"
-python run_downstream.py --ds-train --ds-trainmode scratchLOW --ds-real-sim-ratio  1 0 --ds-task TDOA --time 05200200inf --gpu-id 0, --work-dir "/home/yangbing/image"
+		python run_downstream.py --ds-train --ds-trainmode finetune --ds-real-sim-ratio 1 0 --ds-task TDOA --time * --gpu-id 0, 
+		python run_downstream.py --ds-train --ds-trainmode scratchLOW --ds-real-sim-ratio 1 0 --ds-task TDOA --time * --gpu-id 0, 
 """
 
 import os
@@ -51,13 +49,13 @@ use_cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
 
 set_seed(args.seed)
-# args.ds_task=['T60']#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 # Acoustic setting parameters
 assert args.source_state == 'static', 'Source state model unrecognized~'
 snr_range = args.acoustic_setting['snr_range']
 nmic = args.acoustic_setting['nmic']
 speed = args.acoustic_setting['sound_speed']	
 fs = args.acoustic_setting['fs']
+mic_dist_range = args.acoustic_setting['mic_dist_range'] 
 print(args.ds_specifics)
 
 seeds = {'train': int(args.seed+2e8), 'val': int(args.seed+1e8), 'test': int(args.seed+1)}
@@ -226,7 +224,7 @@ if (args.ds_train):
 									)
 							else: # real-world LOCATA-TDOA est task
 								for stage in stages:
-									real_sig_dir = dirs['micsig_'+stage.split('_')[0]+'_real']
+									real_sig_dir = dirs['micsig_real']
 									if stage=='train':
 										sim_sig_dir = dirs['micsig_'+stage.split('_')[0]+'_simu']
 									else:
@@ -235,7 +233,14 @@ if (args.ds_train):
 										real_sig_dir=real_sig_dir, 
 										sim_sig_dir=sim_sig_dir, 
 										real_sim_ratio=real_sim_ratios[stage.split('_')[0]], 
+										T = T,
+										fs = fs,
+										stage = stage.split('_')[0],
+										mic_dist_range = mic_dist_range,
+										nmic_selected = nmic,
+										prob_mode = [''],
 										load_anno=True, 
+										sound_speed=speed, 
 										dataset_sz=data_num[stage], 
 										transforms=[selecting]
 									)

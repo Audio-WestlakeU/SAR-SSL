@@ -120,50 +120,20 @@ class opt_downstream():
         self.work_dir = r'~'
         self.work_dir = os.path.abspath(os.path.expanduser(self.work_dir))
         self.work_dir_local = os.path.abspath(os.path.expanduser(self.work_dir))
-       
 
-        ##########################################
-        self.time_ver = '0821'
-        # self.time_ver = '0508'
-        ##########################################
-
-        # Other acoustic setting
+        # Acoustic setting
         self.acoustic_setting = {
             'sound_speed': 343.0, 
             'fs': 16000, 
             'snr_range': [15, 30],
-            'nmic': 2,}
+            'nmic': 2,
+            'mic_dist_range':[0.03, 0.20]}
 
         self.extra_info = '' 
-        
         self.ds_token = ''
         self.ds_head = ''
         self.ds_embed = ''
         self.ds_nsimroom = 0
-
-        # # Downstream: simulated or real-world
-        # ##########################################
-        # # downstream_sim = True
-        # downstream_sim = False
-        # ##########################################
-        # if downstream_sim:
-        #     ds_task = ['']
-        #     ds_data = 'sim'
-        #     # self.train_test_model = 'sim_' + self.time_ver 
-        #     real_sim_ratio = [0, 1]
-        # else:
-        #     ds_task = ['']
-        #     ds_data = 'real'
-        #     real_sim_ratio = [1, 0] # real
-        #     # real_sim_ratio = [1, 1] # real + sim
-        #     # real_sim_ratio = [0, 1] # sim
-        #     # self.train_test_model = 'real_' + self.time_ver + '_train' + str(real_sim_ratio[0]) + 'real'+ str(real_sim_ratio[1]) + 'sim_valreal' 
-        #     # self.train_test_model = 'real_' + self.time_ver + '_train0real1sim_valsim'  # only sim 
-
-        # self.ds_specifics = {
-        #     'task': ds_task, 
-        #     'data': ds_data,
-        #     'real_sim_ratio': real_sim_ratio, }
 
     def parse(self):
         """ Function: Define optional arguments
@@ -207,8 +177,7 @@ class opt_downstream():
         self.ds_head = args.ds_head
         self.ds_embed = args.ds_embed
         self.ds_nsimroom = args.ds_nsimroom
-        
-        # args.ds_task = ['T60']
+
         self.ds_specifics = {'task': args.ds_task}
         if self.simu_exp:
             print('\nSimulated experiments:', 'time='+self.time, 'task='+str(args.ds_task), 'ds-embed='+self.ds_embed)
@@ -343,9 +312,7 @@ class opt_downstream():
             dirs['rir_train_simu'] = dirs['gerdata'] + '/RIR/simu/train'
 
             # LOCATA-TDOA estimation
-            dirs['micsig_train_real'] = dirs['data'] + '/MicSig/real/LOCATA'
-            dirs['micsig_val_real'] = dirs['data'] + '/MicSig/real/LOCATA'
-            dirs['micsig_test_real'] = dirs['data'] + '/MicSig/real/LOCATA'
+            dirs['micsig_real'] = dirs['data'] + '/MicSig/LOCATA'
             dirs['micsig_train_simu'] = dirs['gerdata'] + '/MicSig/simu_ds/train'
 
             data_model_flag = 'real_' + 'train' + str(self.ds_specifics['real_sim_ratio'][0]) + 'real'+ str(self.ds_specifics['real_sim_ratio'][1]) + 'sim_valreal'

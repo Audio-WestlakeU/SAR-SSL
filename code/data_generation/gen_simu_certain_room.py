@@ -1,3 +1,10 @@
+""" Generate simulated room impulse responses and microphone signals of certain number of room acoustics for training and test  
+    Examples: 
+    python gen_simu_certain_room.py --mode rir --stage train --room_num 1000 --save_to ../../data/RIR/simu 
+    python gen_simu_certain_room.py --mode sig --stage train --room_num 1000 --sig_num_each_rir 2 --src_dir ../../../data/SrcSig/wsj0 --save_to ../../data/MicSig/simu_ds 
+    python gen_simu_certain_room.py --mode sig --stage val --room_num 20 --sig_num_each_rir 1 --src_dir ../../../data/SrcSig/wsj0 --save_to ../../data/MicSig/simu_ds 
+    python gen_simu_certain_room.py --mode sig --stage test --room_num 20 --sig_num_each_rir 4 --src_dir ../../../data/SrcSig/wsj0 --save_to ../../data/MicSig/simu_ds 
+"""
 import os
 cpu_num = 8*2
 os.environ["OMP_NUM_THREADS"] = str(cpu_num)
@@ -414,8 +421,3 @@ if __name__ == '__main__':
         # generate configuration & microphone signals
         GenerateRandomMicSigOfCertainRoom(**args_for_generate_sig_cfg)
 
-    # Examples: 
-    # python gen_simu_certain_room.py --mode rir --stage train --room_num 1000 --save_to /data/home/yangbing/SAR-SSL/data/RIR/simu  --gpus [0,1]
-    # python gen_simu_certain_room.py --mode sig --stage train --room_num 1000 --sig_num_each_rir 2 --save_to /data/home/yangbing/SAR-SSL/data/MicSig/simu_ds --src_dir /data/home/yangbing/data/SrcSig/wsj0 --gpus [0,1] 
-    # python gen_simu_certain_room.py --mode sig --stage val --room_num 20 --sig_num_each_rir 1 --save_to /data/home/yangbing/SAR-SSL/data/MicSig/simu_ds --src_dir /data/home/yangbing/data/SrcSig/wsj0 --gpus [0,1] 
-    # python gen_simu_certain_room.py --mode sig --stage test --room_num 20 --sig_num_each_rir 4 --save_to /data/home/yangbing/SAR-SSL/data/MicSig/simu_ds --src_dir /data/home/yangbing/data/SrcSig/wsj0 --gpus [0,1] 

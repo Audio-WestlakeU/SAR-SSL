@@ -11,10 +11,11 @@ from data_generation.utils_src import *
 from data_generation.utils_noise import *
 import data_generation.gen_sig_from_real_rir as real_dataset
 import data_generation.utils_simu_rir_sig as simu_dataset 
-
+import data_generation.gen_LOCATA as locata_dataset
 
 class RandomRealDataset(Dataset):
-    """ Load ramdom real-world microphone signals (RealSig) or microphone signals generated with real RIRs (RealRIR)
+    """ Load ramdom real-world microphone signals or presaved microphone signals generated with real RIRs 
+        1. for fine-tuning with ACE dataset
     """
     def __init__(
         self, 
@@ -103,9 +104,10 @@ class RandomRealDataset(Dataset):
 
 
 class FixMicSigDataset(Dataset):
-    """ Load fixed presaved microphone signals (*wav) (simulated data or microphones signal generated with real RIRs)
-        1. for pretraining with simulated data, microphone signals generated with real RIR
-        2. for fine-tuning with simulated data
+    """ Load fixed presaved microphone signals (simulated data or microphones signal generated with real RIRs)
+        1. for pretraining with simulated data
+        2. for microphone signals generated with real RIR
+        3. for fine-tuning with only simulated data
 	"""
     def __init__(self, data_dir, load_anno, dataset_sz, transforms=None):
 
@@ -118,10 +120,10 @@ class FixMicSigDataset(Dataset):
             np.random.shuffle(self.files)
         else:
             self.files = list(Path(data_dir).rglob('*.wav'))
-        if dataset_sz is None:
+        if dataset_sz is not None:
             self.dataset_sz = np.min([len(self.files), dataset_sz])
         else:
-            self.dataset_sz = dataset_sz
+            self.dataset_sz = len(self.files)
         self.load_anno = load_anno
         self.transforms = transforms
 
@@ -155,18 +157,36 @@ class FixMicSigDataset(Dataset):
             return mic_sig.astype(np.float32)
  
 class RandomMicSigDataset(Dataset):
+    """ Load random presaved microphone signals (*wav)
+        1. for fine-tuning with both LOCATA and presaved simulated data 
+    """
     def __init__(self, 
         real_sig_dir, 
         sim_sig_dir, 
         real_sim_ratio, 
+        T,
+        fs ,
+        stage,
+        mic_dist_range,
+        nmic_selected,
+        prob_mode,
         load_anno, 
         dataset_sz, 
+        sound_speed, 
         transforms=None):
 
-        realdataset = FixMicSigDataset(
+        realdataset = locata_dataset.LOCATADataset(
             data_dir = real_sig_dir,
+            T = T,
+            fs = fs,
+            stage = stage,
+            mic_dist_range = mic_dist_range,
+            nmic_selected = nmic_selected,
+            prob_mode = prob_mode,
             load_anno = load_anno,
             dataset_sz = None,
+            sound_speed = sound_speed,
+            src_single_static = True,
             transforms = transforms
             )
 
@@ -192,15 +212,12 @@ class RandomMicSigDataset(Dataset):
 
     def __getitem__(self, idx=None):
 
-        dataset = np.random.choice(self.dataset_list, 1)[0]
+        dataset_idx = np.random.randint(0, len(self.dataset_list))
+        dataset = self.dataset_list[dataset_idx]
         idx = np.random.randint(0, len(dataset))
         mic_sig, annos = dataset.__getitem__(idx)
-        TDOA = annos['TDOA']
-        print(TDOA.shape)
-        print(a)
 
-        return mic_sig.astype(np.float32), TDOA.astype(np.float32)
-
+        return mic_sig.astype(np.float32), annos 
 
 class RandomMicSigFromRIRDataset(Dataset):
     """ Generate microphone signals from real RIRs
@@ -488,60 +505,4 @@ class Selecting(object):
 
 
 if __name__ == "__main__":
-    from opt import opt_downstream
-    dirs = opt_downstream().dir()
-
-    ## Noise
-    # T = 20
-    # RIRdataset = RIRDataset(fs=16000, data_dir='SAR-SSL/data/RIR-pretrain5-2/', dataset_sz=4)
-    # acoustic_scene = RIRdataset[1]
-
-    # souDataset = WSJ0Dataset(path=dirs['sousig_pretrain'], T=T, fs=16000, num_source=1, size=50)
-
-    # mic_pos = np.array(((-0.05, 0.0, 0.0), (0.05, 0.0, 0.0)))
-    # noise_type = 'diffuse_fromRIR'
-    # a = NoiseDataset(T=T, 
-    #                  fs=16000, 
-    #                  nmic=2, 
-    #                  noise_type=Parameter([noise_type], discrete=True), 
-    #                  noise_path=dirs['sousig_pretrain'], 
-    #                  c=343.0, 
-    #                  size=1)
-    # noise_signal = a.get_random_noise(mic_pos=mic_pos, acoustic_scene=acoustic_scene, source_dataset=souDataset, eps=1e-5)
-    # soundfile.write(noise_type+'.wav', noise_signal, 16000)
-
-    import torch
-    import seaborn as sns
-    # data = np.random.randn(1000)
-    # sns.histplot(data, bins=100, kde=True)
-    # plt.xlabel('Value')
-    # plt.ylabel('Frequency')
-    # plt.savefig('tdoas_histogram_random.png')
-    # plt.close()
-    # print(a)
-    rirDataset = RIRDataset( 
-        data_dir_list = ['/data/home/yangbing/SAR-SSL/data/RIR/ACE/'],
-        data_prob_ratio_list=[1],
-        load_noise=True,
-        load_noise_duration = 4.112,
-        noise_type_specify=None,  
-        fs=16000, 
-        dataset_sz=None)
-    kwargs = {'num_workers': 0, 'pin_memory': True}
-    rirDataset = torch.utils.data.DataLoader(rirDataset, batch_size=None, shuffle=False, **kwargs )
-    print(len(rirDataset))
-    tdoas = []
-    for idx, acoustic_scene in enumerate(rirDataset):
-        print(idx)
-        tdoas += [acoustic_scene.TDOA[0,0,0]*16000]
-        # tdoas += [acoustic_scene.TDOA[0,0,0]*16000*(-1)]
-    print(len(tdoas), set(tdoas))
-    sns.boxplot(tdoas)
-    plt.savefig('tdoas_boxplot_switch.png')
-    plt.close()
-        
-    sns.histplot(tdoas, bins=100, kde=True)
-    plt.xlabel('Sample')
-    plt.ylabel('Counts')
-    plt.savefig('tdoas_histogram_switch.png')
-    plt.close()
+    pass

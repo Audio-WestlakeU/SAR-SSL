@@ -1,9 +1,13 @@
-"""	Run training and test processes for self-supervised learning of spatial acoustic representation
+"""	
+	Run training and test processes for self-supervised learning of spatial acoustic representation
 	Reference:  Self-Supervised Learning of Spatial Acoustic Representation with Cross-Channel Signal Reconstruction and Multi-Channel Conformer
 	Author:     Bing Yang
-	History:    2024-02 - Initial version
+	History:    2024-07 - Initial version
 	Copyright Bing Yang
-	python run_pretrain.py --pretrain --simu-exp --gpu-id 0,1
+
+	Examples:
+		python run_pretrain.py --pretrain --simu-exp --gpu-id 0, 
+		python run_pretrain.py --pretrain --gpu-id 0, 
 """
 
 import os
@@ -26,16 +30,13 @@ torch.backends.cudnn.allow_tf32 = True  # The flag below controls whether to all
 # torch.set_float32_matmul_precision('medium')
 # torch.set_num_threads(cpu_num)
 
-import json
 import scipy.io
 import soundfile
-import numpy as np
-from pathlib import Path
 from tensorboardX import SummaryWriter
 import dataset as at_dataset
 import learner as at_learner
 import model as at_model
-from common.utils import set_seed, set_random_seed, set_learning_rate, create_learning_rate_schedule, get_nparams, get_FLOPs, save_config_to_file,vis_time_fre_data
+from common.utils import set_seed, set_random_seed, create_learning_rate_schedule, get_nparams, get_FLOPs, save_config_to_file,vis_time_fre_data
 
 use_cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
