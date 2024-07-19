@@ -364,6 +364,7 @@ def GenerateRandomMicSigOfCertainRoom(
                     noidataset=noidataset,
                     snr_range=snr_range, 
                     save_to=os.path.join(save_to, stage+'/R'+str(room_idx+1)),
+                    save_dp=False,
                     seed=seed+room_idx*rir_num_each_room*sig_num_each_rir,
                 ),
                 range(rir_num_each_room*sig_num_each_rir),
@@ -389,6 +390,7 @@ def GenerateRandomMicSigOfCertainRoom(
                         noidataset=noidataset,
                         snr_range=snr_range, 
                         save_to=os.path.join(save_to, stage+'/R'+str(room_idx+1)),
+                        save_dp=False,
                         seed=seed+room_idx*rir_num_each_room*sig_num_each_rir,
                         )
 

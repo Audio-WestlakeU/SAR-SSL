@@ -100,7 +100,7 @@ class NoiseSignal(Dataset):
             noise = pad_cut_sig_sameutt(noise, nsample_desired)
 
             if fs != self.fs:
-                noise_copy = scipy.signal.resample_poly(noise_copy, up=self.fs, down=fs)
+                 noise = scipy.signal.resample_poly(noise, up=self.fs, down=fs)
 
             # Generate M mutually 'independent' input signals
             M = mic_pos.shape[0]

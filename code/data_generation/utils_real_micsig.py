@@ -223,40 +223,40 @@ class RealMANDataset(RealMicSigDataset):
 
     def get_items_probs(self, data_dir, tasks, arrays, mic_idxes_selected, duration_min_limit, stage, prob_mode):
         dataset_split = {'train':[
-                                    'LivingRoom1',  #'scene_0427_教师公寓_客厅',
-                                    'LivingRoom3'   #'scene_0703_Hotel',
-                                    'LivingRoom4',  #'scene_0704_Loft',
-                                    'LivingRoom5',  #'scene_0706_民宿',
-                                    'LivingRoom6',  #'scene_0707_民宿2',
-                                    'LivingRoom7',  #'scene_0709_轰趴馆',
-                                    'LivingRoom8',  #'scene_0714_学生宿舍',
-                                    'Classroom1',   #'scene_0418_212',
-                                    'Classroom2',   #'scene_0718_201',
-                                    'Classroom3',   #'scene_0803_小学音乐教室',
-                                    'OfficeRoom1',  #'scene_0305_TeacherOffice',
-                                    'OfficeRoom3',  #'scene_0420_210',
-                                    'OfficeRoom4',  #'scene_0726_KTV',
-                                    'OfficeLobby',  #'scene_0411_1号门大厅',
-                                    'Library',      #'scene_0717_Library',
-                                    'Auditorium',   #'scene_0730_dalitang',
-                                    'BadmintonCourt1',  #'scene_0417_羽毛球馆',
-                                    'BadmintonCourt2',  #'scene_0308_badminton_court',
+                                    'LivingRoom1',  #'scene_0427_教师公寓_客厅'
+                                    'LivingRoom3'   #'scene_0703_Hotel'
+                                    'LivingRoom4',  #'scene_0704_Loft'
+                                    'LivingRoom5',  #'scene_0706_民宿'
+                                    'LivingRoom6',  #'scene_0707_民宿2'
+                                    'LivingRoom7',  #'scene_0709_轰趴馆'
+                                    'LivingRoom8',  #'scene_0714_学生宿舍'
+                                    'Classroom1',   #'scene_0418_212'
+                                    'Classroom2',   #'scene_0718_201'
+                                    'Classroom3',   #'scene_0803_小学音乐教室'
+                                    'OfficeRoom1',  #'scene_0305_TeacherOffice'
+                                    'OfficeRoom3',  #'scene_0420_210'
+                                    'OfficeRoom4',  #'scene_0726_KTV'
+                                    'OfficeLobby',  #'scene_0411_1号门大厅'
+                                    'Library',      #'scene_0717_Library'
+                                    'Auditorium',   #'scene_0730_dalitang'
+                                    'BadmintonCourt1',  #'scene_0417_羽毛球馆'
+                                    'BadmintonCourt2',  #'scene_0308_badminton_court'
                                     'BasketballCourt2', #'scene_0311_basketball'
-                                    'SunkenPlaza1',     #'scene_0724_C19下沉广场',
-                                    'Gym',              # 'scene_0427_健身房',
-                                    'Cafeteria1',       #'scene_0409_canteen',
-                                    'UndergroundParking1',  #'scene_0802_车库',
-                                    'UndergroundParking2',  #'scene_0306_A2park',
-                                    'Car-Gasoline',     #'scene_0625_油车',
-                                    'Car-Electric', #'scene_0630_电车',
-                                    'Bus-Electric', #'scene_0831_公交车',                                        
+                                    'SunkenPlaza1',     #'scene_0724_C19下沉广场'
+                                    'Gym',              # 'scene_0427_健身房'
+                                    'Cafeteria1',       #'scene_0409_canteen'
+                                    'UndergroundParking1',  #'scene_0802_车库'
+                                    'UndergroundParking2',  #'scene_0306_A2park'
+                                    'Car-Gasoline',     #'scene_0625_油车'
+                                    'Car-Electric',     #'scene_0630_电车'
+                                    'Bus-Electric',     #'scene_0831_公交车'                                       
                                 ],
                          'val': [
                                     'LivingRoom2',      #'scene_0427_教师公寓_小房间'
-                                    'OfficeRoom2',      # 'scene_0305_LabOffice'
-                                    'BasketballCourt1', # 'scene_0415_操场'
-                                    'Market',           # 'scene_0516_菜市场'
-                                    'Cafeteria3',       # 'scene_0307_c18two',
+                                    'OfficeRoom2',      #'scene_0305_LabOffice'
+                                    'BasketballCourt1', #'scene_0415_操场'
+                                    'Market',           #'scene_0516_菜市场'
+                                    'Cafeteria3',       #'scene_0307_c18two'
                                 ],
                          'test': []
                          }
@@ -382,9 +382,9 @@ class RealMANDataset(RealMicSigDataset):
         return vec
 
 
-class RealMANDatasetOri(RealMicSigDataset):
+class RealMANOriDataset(RealMicSigDataset):
     """ 
-	    urls:  https://github.com/Audio-WestlakeU/RealMAN
+	    urls: https://github.com/Audio-WestlakeU/RealMAN
 	"""
     def __init__(self, 
                  data_dir: str, 
@@ -520,8 +520,8 @@ class RealMANDatasetOri(RealMicSigDataset):
         pos_rcv[27, :] = np.array([-R * 4, 0, 0])
 
         L = 0.045
-        pos_rcv[28, :] = np.array([0, 0, L])
-        pos_rcv[29, :] = np.array([0, 0, L * 2])
+        pos_rcv[28, :] = np.array([0, 0, L * 2])
+        pos_rcv[29, :] = np.array([0, 0, L])
         pos_rcv[30, :] = np.array([0, 0, -L])
         pos_rcv[31, :] = np.array([0, 0, -L * 2])
 
@@ -1694,60 +1694,76 @@ class CHiME3Dataset(RealMicSigDataset):
 
 
 if __name__ == '__main__':
-    from opt import opt_pretrain
-    opts = opt_pretrain()
-    dirs = opts.dir()
+    dirs = {}
+    dirs['gerdata'] = '../../data'
+    dirs['data'] = '../../../data'
+    dirs = {
+        'DCASE': dirs['gerdata'] + '/MicSig/real/pretrain/DCASE',
+        'MIR': dirs['gerdata'] + '/MicSig/real/pretrain/MIR',
+        'Mesh': dirs['gerdata'] + '/MicSig/real/pretrain/Mesh',
+        'BUTReverb': dirs['gerdata'] + '/MicSig/real/pretrain/BUTReverb',
+        'dEchorate': dirs['gerdata'] + '/MicSig/real/pretrain/dEchorate',
+        'ACE': dirs['gerdata'] + '/MicSig/real/pretrain/ACE',
+        'LOCATA': dirs['data'] + '/MicSig/LOCATA',
+        'MCWSJ': dirs['data'] + '/MicSig/MC_WSJ_AV',
+        'LibriCSS': dirs['data'] + '/MicSig/LibriCSS',
+        'AMI': dirs['data'] + '/MicSig/AMI',
+        'AISHELL4': dirs['data'] + '/MicSig/AISHELL-4',
+        'M2MeT': dirs['data'] + '/MicSig/M2MeT',
+        'RealMAN': dirs['data'] + '/MicSig/RealMAN', 
+        'RealMANOri': dirs['data'] + '/MicSig/aligned_static_high_精细对齐_correctDPRIR_filtered3'
+        }
 
-    # sig_dir = dirs['LOCATA']
-    # dataset = LOCATADataset(
-	# 			data_dir = sig_dir,
-	# 			T = 4.112,
-	# 			fs = 16000,
-	# 			stage = 'train',
-	# 			# tasks = [1],
-	# 			# arrays = ['benchmark2'],
-	# 			mic_dist_range = [0.05, 20],
-	# 			dataset_sz = 10
-	# 		)
-    # _, total_duration = dataset.duration()
-    # print('LOCATA: ', total_duration, 'h')
-    # # for i in range(10):
-    # #     sig = dataset[i]
-    # #     print(sig.shape)
+    sig_dir = dirs['LOCATA']
+    dataset = LOCATADataset(
+				data_dir = sig_dir,
+				T = 4.112,
+				fs = 16000,
+				stage = 'train',
+				# tasks = [1],
+				# arrays = ['benchmark2'],
+				mic_dist_range = [0.05, 20],
+				dataset_sz = 10
+			)
+    _, total_duration = dataset.duration()
+    print('LOCATA: ', total_duration, 'h')
+    # for i in range(10):
+    #     sig = dataset[i]
+    #     print(sig.shape)
 
-    # sig_dir = dirs['MCWSJ']
-    # dataset = MCWSJDataset(
-	# 			data_dir = sig_dir,
-	# 			T = 4.112,
-	# 			fs = 16000,
-	# 			stage = 'train',
-	# 			# tasks = ['stat'],
-	# 			# arrays = ['array1', 'array2'],
-	# 			mic_dist_range = [0.05, 20],
-	# 			dataset_sz = 10
-	# 		)
-    # _, total_duration = dataset.duration()
-    # print('MCWSJ: ', total_duration, 'h')
-    # # for i in range(10):
-    # #     sig = dataset[i]
-    # #     print(sig.shape)
+    sig_dir = dirs['MCWSJ']
+    dataset = MCWSJDataset(
+				data_dir = sig_dir,
+				T = 4.112,
+				fs = 16000,
+				stage = 'train',
+				# tasks = ['stat'],
+				# arrays = ['array1', 'array2'],
+				mic_dist_range = [0.05, 20],
+				dataset_sz = 10
+			)
+    _, total_duration = dataset.duration()
+    print('MCWSJ: ', total_duration, 'h')
+    # for i in range(10):
+    #     sig = dataset[i]
+    #     print(sig.shape)
 
-    # sig_dir = dirs['LibriCSS']
-    # dataset = LibriCSSDataset(
-	# 			data_dir = sig_dir,
-	# 			T = 4.112,
-	# 			fs = 16000,
-	# 			stage = 'train',
-	# 			# tasks = ['stat'],
-	# 			# arrays = ['array1', 'array2'],
-	# 			mic_dist_range = [0.05, 20],
-	# 			dataset_sz = 10
-	# 		)
-    # _, total_duration = dataset.duration()
-    # print('LibriCSS: ', total_duration, 'h')
-    # # for i in range(10):
-    # #     sig = dataset[i]
-    # #     print(sig.shape)
+    sig_dir = dirs['LibriCSS']
+    dataset = LibriCSSDataset(
+				data_dir = sig_dir,
+				T = 4.112,
+				fs = 16000,
+				stage = 'train',
+				# tasks = ['stat'],
+				# arrays = ['array1', 'array2'],
+				mic_dist_range = [0.05, 20],
+				dataset_sz = 10
+			)
+    _, total_duration = dataset.duration()
+    print('LibriCSS: ', total_duration, 'h')
+    # for i in range(10):
+    #     sig = dataset[i]
+    #     print(sig.shape)
 
     # sig_dir = dirs['CHiME3']
     # dataset = CHiME3Dataset(
@@ -1766,55 +1782,55 @@ if __name__ == '__main__':
     # #     sig = dataset[i]
     # #     print(sig.shape)
 
-    # sig_dir = dirs['AMI']
-    # dataset = AMIDataset(
-	# 			data_dir = sig_dir,
-	# 			T = 4.112,
-	# 			fs = 16000,
-	# 			stage = 'train',
-	# 			# tasks = ['stat'],
-	# 			# arrays = ['array1', 'array2'],
-	# 			mic_dist_range = [0.05, 20],
-	# 			dataset_sz = 10
-	# 		)
-    # _, total_duration = dataset.duration()
-    # print('AMI: ', total_duration, 'h')
-    # # for i in range(100):
-    # #     sig = dataset[i]
-    # #     print(sig.shape)
+    sig_dir = dirs['AMI']
+    dataset = AMIDataset(
+				data_dir = sig_dir,
+				T = 4.112,
+				fs = 16000,
+				stage = 'train',
+				# tasks = ['stat'],
+				# arrays = ['array1', 'array2'],
+				mic_dist_range = [0.05, 20],
+				dataset_sz = 10
+			)
+    _, total_duration = dataset.duration()
+    print('AMI: ', total_duration, 'h')
+    # for i in range(100):
+    #     sig = dataset[i]
+    #     print(sig.shape)
     
-    # sig_dir = dirs['AISHELL4']
-    # dataset = AISHELL4Dataset(
-	# 			data_dir = sig_dir,
-	# 			T = 4.112,
-	# 			fs = 16000,
-	# 			stage = 'train',
-	# 			# tasks = ['stat'],
-	# 			# arrays = ['array1', 'array2'],
-	# 			mic_dist_range = [0.05, 20],
-	# 			dataset_sz = 10,
-    #           remove_spkoverlap = True,
-	# 		)
-    # _, total_duration = dataset.duration()
-    # print('AISHELL4: ', total_duration, 'h')
-    # # for i in range(10):
-    # #     sig = dataset[i]
-    # #     print(sig.shape)
+    sig_dir = dirs['AISHELL4']
+    dataset = AISHELL4Dataset(
+				data_dir = sig_dir,
+				T = 4.112,
+				fs = 16000,
+				stage = 'train',
+				# tasks = ['stat'],
+				# arrays = ['array1', 'array2'],
+				mic_dist_range = [0.05, 20],
+				dataset_sz = 10,
+              remove_spkoverlap = True,
+			)
+    _, total_duration = dataset.duration()
+    print('AISHELL4: ', total_duration, 'h')
+    # for i in range(10):
+    #     sig = dataset[i]
+    #     print(sig.shape)
 
-    # sig_dir = dirs['M2MeT']
-    # dataset = M2MeTDataset(
-	# 			data_dir = sig_dir,
-	# 			T = 4.112,
-	# 			fs = 16000,
-	# 			stage = 'train',
-	# 			# tasks = ['stat'],
-	# 			# arrays = ['array1', 'array2'],
-	# 			mic_dist_range = [0.05, 20],
-	# 			dataset_sz = 100,
-    #             remove_spkoverlap = False,
-	# 		)
-    # _, total_duration = dataset.duration()
-    # print('M2Met: ', total_duration, 'h')
+    sig_dir = dirs['M2MeT']
+    dataset = M2MeTDataset(
+				data_dir = sig_dir,
+				T = 4.112,
+				fs = 16000,
+				stage = 'train',
+				# tasks = ['stat'],
+				# arrays = ['array1', 'array2'],
+				mic_dist_range = [0.05, 20],
+				dataset_sz = 100,
+                remove_spkoverlap = False,
+			)
+    _, total_duration = dataset.duration()
+    print('M2Met: ', total_duration, 'h')
     # for i in range(100000):
     #     sig = dataset[i]
     #     print(sig.shape)
@@ -1848,6 +1864,22 @@ if __name__ == '__main__':
 			)
     _, total_duration = dataset.duration()
     print('RealMAN: ', total_duration, 'h')
-    for i in range(10):
-        sig = dataset[i]
-        print(sig.shape) 
+    # for i in range(10):
+    #     sig = dataset[i]
+        # print(sig.shape) 
+
+    sig_dir = dirs['RealMANOri']
+    dataset = RealMANOriDataset(
+				data_dir = sig_dir,
+				T = 4.112,
+				fs = 16000,
+				stage = 'train',
+				mic_dist_range = [0.05, 20],
+				dataset_sz = 100,
+                remove_spkoverlap = False,
+			)
+    _, total_duration = dataset.duration()
+    print('RealMANOri: ', total_duration, 'h')
+    # for i in range(10):
+    #     sig = dataset[i]
+    #     print(sig.shape) 

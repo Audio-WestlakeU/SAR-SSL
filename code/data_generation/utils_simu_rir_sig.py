@@ -756,6 +756,7 @@ class MicrophoneSignalOrRIR():
         noidataset,
         snr_range, 
         save_to,
+        save_dp=False,
         seed=1,
         ):
         # print(seed+idx)
@@ -852,6 +853,9 @@ class MicrophoneSignalOrRIR():
         Path(save_to).mkdir(parents=True, exist_ok=True)
         save_to_file = os.path.join(save_to, str(idx) + f'.wav')
         soundfile.write(save_to_file, mic_sig, fs)
+        if save_dp:
+            save_to_file = os.path.join(save_to, str(idx) + f'_dp.wav')
+            soundfile.write(save_to_file, mic_sig_dp, fs)
         save_to_file = os.path.join(save_to, str(idx) + f'_info.npz')
         np.savez(save_to_file, **{**sa_cfg, **annos})
  

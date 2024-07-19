@@ -5,7 +5,7 @@
         python gen_simu.py --mode sig --stage pretrain --data_num 512000 --src_dir ../../../data/SrcSig/wsj0 --save_to ../../data/MicSig/simu --gpus [0,1]
         python gen_simu.py --mode sig --stage preval --data_num 4000 --src_dir ../../../data/SrcSig/wsj0 --save_to ../../data/MicSig/simu --gpus [0]
         python gen_simu.py --mode sig --stage pretest --data_num 4000 --src_dir ../../../data/SrcSig/wsj0 --save_to ../../data/MicSig/simu --gpus [0]
-        python gen_simu.py --mode sig --stage pretest_ins_T1000 --data_num 10 --room_sz_range [[5,10],[3,6],[2.5,3]] --T60_range [1.0,1.0] --snr_range [20,20] --src_dir ../../../data/SrcSig/wsj0 --save_to ../../data/MicSig/simu --gpus [0]
+        python gen_simu.py --mode sig --stage pretest_ins_T1000 --data_num 10 --save_dp True --room_sz_range [[5,10],[3,6],[2.5,3]] --T60_range [1.0,1.0] --snr_range [20,20] --src_dir ../../../data/SrcSig/wsj0 --save_to ../../data/MicSig/simu --gpus [0]
 
         # python gen_simu.py --mode rir --stage train --data_num 1000 --save_to ../../data/RIR/simu --gpus [0,1]
         # python gen_simu.py --mode rir --stage val --data_num 20 --save_to ../../data/RIR/simu --gpus [0,1]
@@ -222,6 +222,7 @@ def GenerateRandomMicSig(
     stage: str='pretrain',
     data_num: int=1,
     save_to: str='',
+    save_dp: bool=False,
     gpus: List[int]=[0,0,1,1],
     use_gpu: bool=True,
     ): 
@@ -349,6 +350,7 @@ def GenerateRandomMicSig(
                 noidataset=noidataset,
                 snr_range=snr_range,   
                 save_to=os.path.join(save_to, stage),
+                save_dp=save_dp,
                 seed=seed,
             ),
             range(data_num),
@@ -371,6 +373,7 @@ def GenerateRandomMicSig(
                 noidataset=noidataset,
                 snr_range=snr_range,  
                 save_to=os.path.join(save_to, stage),
+                save_dp=save_dp,
                 seed=seed,
                 )
 
