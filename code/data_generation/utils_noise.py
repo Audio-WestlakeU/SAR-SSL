@@ -123,7 +123,7 @@ class NoiseSignal(Dataset):
             nsample_desired = int(self.T * fs)
             noise = pad_cut_sig_sameutt(noise, nsample_desired)
             if fs != self.fs:
-                noise_signal = scipy.signal.resample_poly(noise_copy, up=self.fs, down=fs)
+                noise_signal = scipy.signal.resample_poly(noise, up=self.fs, down=fs)
             noise_signal = noise_signal/(np.max(noise_signal)+eps)
                 
         else:

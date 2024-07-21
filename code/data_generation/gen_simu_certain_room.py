@@ -46,7 +46,7 @@ def GenerateRandomRIROfCertainRoom(
     abs_weights_range: List[Tuple[float, float]]=[(0.5,1)]*6, 
     mic_array_cfg: Dict[str, Any]=mic_array_cfg_specify_2ch, 
     array_pos_ratio_range: Union[List[Tuple[float, float]], np.ndarray]=[(0.2,0.8), (0.2,0.8), (0.1,0.5)], 
-    num_source_range: Tuple[float,float]=(1,1), 
+    num_source_range: Tuple[int,int]=(1,1), 
     source_state: str='static', 
     min_src_array_dist: float=0.3, 
     min_src_boundary_dist: float=0.3, 
@@ -206,12 +206,13 @@ def GenerateRandomMicSigOfCertainRoom(
     abs_weights_range: List[Tuple[float, float]]=[(0.5,1)]*6, 
     mic_array_cfg: Dict[str, Any]=mic_array_cfg_specify_2ch, 
     array_pos_ratio_range: Union[List[Tuple[float, float]], np.ndarray]=[(0.2,0.8), (0.2,0.8), (0.1,0.5)], 
-    num_source_range: Tuple[float,float]=(1,1), 
+    num_source_range: Tuple[int,int]=(1,1), 
     source_state: str='static', 
     min_src_array_dist: float=0.3, 
     min_src_boundary_dist: float=0.3, 
     traj_pt_mode: str='time',
     snr_range: Tuple[float,float]=(15,30),
+    noise_type: str='white',
     fs: int=16000, 
     c: float=343.0, 
     ism_db: float=12, 
@@ -224,6 +225,7 @@ def GenerateRandomMicSigOfCertainRoom(
     sig_num_each_rir: int=2,
     #data_num: int=1024,
     save_to: str='',
+    gpu_conv: bool=False,
     gpus: List[int]=[0,0,1,1],
     use_gpu: bool=False,
     ): 
@@ -322,13 +324,14 @@ def GenerateRandomMicSigOfCertainRoom(
     srcdataset = WSJ0Dataset(
         path = src_dir,
         T = T,
-        fs = fs
+        fs = fs,
+        num_source = max(num_source_range) 
     )
     noidataset = NoiseSignal(
         T = T,
         fs = fs,
-        nmic = mic_array_cfg_specify_2ch['mic_pos_relative'].shape[0],
-        noise_type = 'diffuse_white',
+        nmic = mic_array_cfg['mic_pos_relative'].shape[0],
+        noise_type = noise_type,
         noise_path = noi_dir,
         c = c
     )
@@ -365,6 +368,7 @@ def GenerateRandomMicSigOfCertainRoom(
                     snr_range=snr_range, 
                     save_to=os.path.join(save_to, stage+'/R'+str(room_idx+1)),
                     save_dp=False,
+                    gpu_conv=gpu_conv,
                     seed=seed+room_idx*rir_num_each_room*sig_num_each_rir,
                 ),
                 range(rir_num_each_room*sig_num_each_rir),
@@ -391,6 +395,7 @@ def GenerateRandomMicSigOfCertainRoom(
                         snr_range=snr_range, 
                         save_to=os.path.join(save_to, stage+'/R'+str(room_idx+1)),
                         save_dp=False,
+                        gpu_conv=gpu_conv,
                         seed=seed+room_idx*rir_num_each_room*sig_num_each_rir,
                         )
 

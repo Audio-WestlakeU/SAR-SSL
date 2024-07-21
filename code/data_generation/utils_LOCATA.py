@@ -112,10 +112,11 @@ class LOCATADataset(Dataset):
         fs = soundfile.info(wav_path).samplerate
         nsample = int(duration * fs)
         if self.load_anno:
-            t = (np.arange(nsample))/self.fs
+            t = (np.arange(nsample))/fs
             TDOA = self.load_annotation(t, fs, self.sound_speed, mic_pos, time_path, array_pos_path, src_pos_path, vad_path=None)[0]
 
         nsample_desired = int(self.T * fs)
+        pad = False
         if nsample<=nsample_desired:
             mic_sig = self.read_micsig(wav_path, mic_idxes_selected=mic_idxes)
             mic_sig = pad_cut_sig_sameutt(mic_sig, nsample_desired)
@@ -123,6 +124,7 @@ class LOCATADataset(Dataset):
             print('smaller number of samples')
             nsample = mic_sig.shape[0]
             duration = nsample/fs
+            pad = True
 
         # Select T-second signal
         if duration < 2.2:
@@ -133,11 +135,14 @@ class LOCATADataset(Dataset):
                 st_ed_ratio = [0, 0.5]
             else:
                 st_ed_ratio = [0.5, 1]
-        st = np.random.randint(round(nsample*st_ed_ratio[0]), round(nsample*st_ed_ratio[1]))
+        st = np.random.randint(round(nsample*st_ed_ratio[0]), round(nsample*st_ed_ratio[1]) - nsample_desired)
         ed = st + nsample_desired
-        mic_sig = self.read_micsig(wav_path, st=st, ed=ed, mic_idxes_selected=mic_idxes)
+        if pad:
+            mic_sig = mic_sig[st:ed, ...]
+        else:
+            mic_sig = self.read_micsig(wav_path, st=st, ed=ed, mic_idxes_selected=mic_idxes)
         TDOA = TDOA[st:ed, ...]
-
+ 
         if self.fs != fs:
             mic_sig = scipy.signal.resample_poly(mic_sig, self.fs, fs)
             TDOA = scipy.signal.resample_poly(TDOA, self.fs, fs)

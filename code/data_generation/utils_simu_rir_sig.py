@@ -385,7 +385,7 @@ class SpatialAcoustics():
     
     def plot_room(self, room_sz, traj_pts, mic_pos, view='3D', save_path=None):
         """ Plots the source trajectory and the microphones within the room
-            Args:   traj_pts - (npoints, 3, nsrc)
+            Args:   traj_pts - (npt, 3, nsrc)
                     mic_pos  - (nmic, 3)
         """
         assert view in ['3D', 'XYZ', 'XY', 'XZ', 'YZ']
@@ -503,7 +503,7 @@ class RoomImpulseResponse():
                 c=self.c)
             rir += [rir_per_src]
 
-        rir = np.array(rir).transpose(1,2,3,0) # (npoints,nch,nsamples,nsources)
+        rir = np.array(rir).transpose(1,2,3,0) # (npt,nch,nsample,nsrc)
 
         return rir
 
@@ -613,10 +613,10 @@ class RoomImpulseResponse():
 
         return t60, corr
 
-    def rir_conv_src(self, rir, src_signal, gpuConv=False):
-        ''' rir : (npoint,nch,nsam,nsource)
+    def rir_conv_src(self, rir, src_signal, gpu_conv=False):
+        ''' rir : (npt,nch,nsam,nsrc)
         '''
-        if gpuConv:
+        if gpu_conv:
             import gpuRIR
 
         # Source conv. RIR
@@ -624,10 +624,12 @@ class RoomImpulseResponse():
         num_source = rir.shape[-1]
         nsample = src_signal.shape[0]
         for source_idx in range(num_source):
-            rir_per_src = rir[:, :, :, source_idx]  # (npoint,nch,nsample）
+            rir_per_src = rir[:, :, :, source_idx]  # (npt,nch,nsample）
+            npts = rir_per_src.shape[0]
 
-            if gpuConv:
-                mic_sig_per_src = gpuRIR.simulateTrajectory(src_signal[:, source_idx], rir_per_src, timestamps=self.timestamps, fs=self.fs)
+            if gpu_conv:
+                timestamps = np.arange(npts) / npts * nsample / self.fs 
+                mic_sig_per_src = gpuRIR.simulateTrajectory(src_signal[:, source_idx], rir_per_src, timestamps=timestamps, fs=self.fs)
                 mic_sig_per_src = mic_sig_per_src[0:nsample, :]
 
             else:
@@ -641,8 +643,8 @@ class RoomImpulseResponse():
 
             mic_signal_srcs += [mic_sig_per_src]
 
-        mic_signal_srcs = np.array(mic_signal_srcs).transpose(1, 2, 0)  # (nsamples,nch,nsources)
-        mic_signal = np.sum(mic_signal_srcs, axis=2)  # (nsamples, nch) 
+        mic_signal_srcs = np.array(mic_signal_srcs).transpose(1, 2, 0)  # (nsample,nch,nsrc)
+        mic_signal = np.sum(mic_signal_srcs, axis=2)  # (nsample, nch) 
  
         return mic_signal, mic_signal_srcs
     
@@ -714,7 +716,7 @@ class MicrophoneSignalOrRIR():
         # Get annotation    
         annos = self.generate_annotation(
             traj_pts=sa_cfg['src_traj_pts'],
-            array_pos=sa_cfg['mic_pos'],
+            array_pos=sa_cfg['array_pos'],
             mic_pos=sa_cfg['mic_pos'],
             rir_srcs=rir,
             rir_srcs_dp=rir_dp,
@@ -725,12 +727,11 @@ class MicrophoneSignalOrRIR():
             C80=False,
             source_vad=False, 
             mic_vad=False, 
-            mic_signals=False, 
-            mic_signals_dp=False,
+            mic_sig=False, 
+            mic_sig_dp=False,
             mic_signal_srcs_dp=False,
-            timestamps=False,
-            gpuConv=False,
-            sample_wise=False,
+            gpu_conv=False,
+            pt2sample=False,
             src_single_static=True,
             fs=fs,
             c=c)
@@ -757,6 +758,7 @@ class MicrophoneSignalOrRIR():
         snr_range, 
         save_to,
         save_dp=False,
+        gpu_conv=False,
         seed=1,
         ):
         # print(seed+idx)
@@ -802,8 +804,8 @@ class MicrophoneSignalOrRIR():
         sa_cfg['src_idx'] = src_idx
 
         # Generate clean or direct-path microphone signal
-        mic_sig_clean, mic_sig_srcs_clean = roomir.rir_conv_src(rir, src_sig)
-        mic_sig_dp, mic_sig_srcs_dp = roomir.rir_conv_src(rir_dp, src_sig)
+        mic_sig_clean, mic_sig_srcs_clean = roomir.rir_conv_src(rir, src_sig, gpu_conv=False)
+        mic_sig_dp, mic_sig_srcs_dp = roomir.rir_conv_src(rir_dp, src_sig, gpu_conv=False)
 
         # Generate noise signal
         noi_sig = noidataset.generate_random_noise(mic_pos=sa_cfg['mic_pos'])
@@ -827,23 +829,22 @@ class MicrophoneSignalOrRIR():
         # Get annotation
         annos = self.generate_annotation(
             traj_pts=sa_cfg['src_traj_pts'],
-            array_pos=sa_cfg['mic_pos'],
+            array_pos=sa_cfg['array_pos'],
             mic_pos=sa_cfg['mic_pos'],
             rir_srcs=rir,
             rir_srcs_dp=rir_dp,
             DOA=False, 
-            TDOA=True,                             
+            TDOA=True,                                
             DRR=True,
             C50=True, 
             C80=False,
             source_vad=False, 
             mic_vad=False, 
-            mic_signals=False, 
-            mic_signals_dp=False,
+            mic_sig=False, 
+            mic_sig_dp=False,
             mic_signal_srcs_dp=False,
-            timestamps=False,
-            gpuConv=False,
-            sample_wise=False,
+            gpu_conv=False,
+            pt2sample=False,
             src_single_static=True,
             fs=fs,
             c=c
@@ -859,7 +860,6 @@ class MicrophoneSignalOrRIR():
         save_to_file = os.path.join(save_to, str(idx) + f'_info.npz')
         np.savez(save_to_file, **{**sa_cfg, **annos})
  
-
     def generate_annotation(
         self,
         traj_pts,
@@ -870,48 +870,47 @@ class MicrophoneSignalOrRIR():
         DOA=False, 
         TDOA=False,                             
         DRR=False,
-        # DRRfromDataset=False, 
         C50=False, 
         C80=False,
         source_vad=False, 
         mic_vad=False, 
-        mic_signals=False, 
-        mic_signals_dp=False,
+        mic_sig=False, 
+        mic_sig_dp=False,
         mic_signal_srcs_dp=False,
-        timestamps=False,
-        gpuConv=False,
-        sample_wise=False,
+        gpu_conv=False,
+        pt2sample=False,
+        src_single_static=False,
         fs=16000,
         c=343,
-        src_single_static=True,
         eps=1e-8,
         ):
         
         annos = {}
-        nb_point, _, num_source = traj_pts.shape 
-        if sample_wise:
-            nsample = mic_signals.shape[0]
+        npt, _, num_source = traj_pts.shape 
+        if pt2sample:
+            nsample = mic_sig.shape[0]
             t = np.arange(nsample) / fs
-            timestamps = np.arange(nb_point) * nsample / fs / nb_point
+            timestamps = np.arange(npt) * nsample / fs / npt
+            annos['timestamps'] = timestamps
         if DOA:  # [ele, azi]
-            if sample_wise:
-                DOA = np.zeros((nsample, 2, num_source), dtype=np.float32)  # (nsample, 2, nsource)
+            if pt2sample:
+                DOA = np.zeros((nsample, 2, num_source), dtype=np.float32)  # (nsample, 2, nsrc)
                 for source_idx in range(num_source):
                     trajectory = np.array([np.interp(t, timestamps, traj_pts[:, i, source_idx]) for i in range(3)]).transpose()
                     DOA[:, :, source_idx] = self._cart2sph(trajectory - array_pos)[:, [1,0]]
+                annos['DOA'] = DOA
             else:
-                DOA = np.zeros((nb_point, 2, num_source), dtype=np.float32)  # (nb_point, 2, nsource)
+                DOA = np.zeros((npt, 2, num_source), dtype=np.float32)  # (nb_point, 2, nsrc)
                 for source_idx in range(num_source):
                     DOA[:, :, source_idx] = self._cart2sph(traj_pts[:, :, source_idx] - array_pos)[:, [1,0]]
-            annos['DOA'] = DOA
-            if src_single_static:
-                annos['DOA'] = DOA[0,0,0]
+                annos['DOA'] = DOA
+                if src_single_static:
+                    annos['DOA'] = DOA[0,0,0]
 
         if TDOA: 
-            npoint = traj_pts.shape[0]
             nmic = mic_pos.shape[-2]
             # if (traj_pts==0).all(): # for ACE, static source, discrete values
-            #     TDOA = np.zeros((nsample, nmic-1, num_source))  # (nsample,nch-1,nsource)
+            #     TDOA = np.zeros((nsample, nmic-1, num_source))  # (nsample,nch-1,nsrc)
             #     nsample_find_dp = 200
             #     for source_idx in range(num_source):
             #         for ch_idx in range(1, nmic):
@@ -922,24 +921,25 @@ class MicrophoneSignalOrRIR():
                         
             # else: # for simulated data, continuous values
             if len(mic_pos.shape) == 2:
-                mic_pos = np.tile(mic_pos[np.newaxis, :, :], (npoint, 1, 1))
+                mic_pos = np.tile(mic_pos[np.newaxis, :, :], (npt, 1, 1))
             elif len(mic_pos.shape) == 3:
                 pass
             else:
                 raise Exception('shape of mic_pos is out of range~')
             corr_diff = np.tile(traj_pts[:, np.newaxis, :, :], (1, nmic, 1, 1)) - np.tile(mic_pos[:, :, :, np.newaxis], (1, 1, 1, num_source))
-            dist = np.sqrt(np.sum(corr_diff**2, axis=2))  # (npoint,3,nsource)-(nch,3)=(nnpoint,nch,3,nsource)
-            re_dist = dist[:, 1:, :] - np.tile(dist[:, 0:1, :], (1, nmic - 1, 1))  # (npoint,nch-1,nsource)
-            TDOA = re_dist / c  # (npoint,nch-1,nsource)
-            annos['TDOA'] = TDOA
-            if src_single_static:
-                annos['TDOA'] = TDOA[0,0,0]
-            if sample_wise:
-                annos['TDOA'] = np.zeros((nsample, TDOA.shape[1], num_source))  # (nsample,nch-1,nsource)
+            dist = np.sqrt(np.sum(corr_diff**2, axis=2))  # (npt,3,nsrc)-(nch,3)=(npt,nch,3,nsrc)
+            re_dist = dist[:, 1:, :] - np.tile(dist[:, 0:1, :], (1, nmic - 1, 1))  # (npt,nch-1,nsrc)
+            TDOA = re_dist / c  # (npt,nch-1,nsrc)
+            if pt2sample:
+                annos['TDOA'] = np.zeros((nsample, TDOA.shape[1], num_source))  # (nsample,nch-1,nsrc)
                 for source_idx in range(num_source):
                     for ch_idx in range(annos['TDOA'].shape[1]):
                         annos['TDOA'][:, ch_idx, source_idx] = np.interp(t, timestamps, TDOA[:, ch_idx, source_idx])
-
+            else:
+                annos['TDOA'] = TDOA 
+                if src_single_static:
+                    annos['TDOA'] = TDOA[0,0,0]
+            
         if DRR | C50 | C80:
             rir_len = rir_srcs.shape[2]
             dp_rir_len = rir_srcs_dp.shape[2]
@@ -947,20 +947,16 @@ class MicrophoneSignalOrRIR():
             nb_traj_pts = traj_pts.shape[0]
             zeros_pad = np.zeros((nb_traj_pts, nmic, abs(rir_len - dp_rir_len), num_source))
             if rir_len >= dp_rir_len:  # When RT60=0.15s, RIR_len = dp_RIR_len
-                rir_srcs_dp_pad = np.concatenate((rir_srcs_dp, zeros_pad), axis=2)  # (npoints,nch,nsamples,nsources)
+                rir_srcs_dp_pad = np.concatenate((rir_srcs_dp, zeros_pad), axis=2)  # (npt,nch,nsample,nsrc)
                 rir_srcs_pad = rir_srcs
             else:
                 rir_srcs_dp_pad = rir_srcs_dp
-                rir_srcs_pad = np.concatenate((rir_srcs, zeros_pad), axis=2)  # (npoints,nch,nsamples,nsources)
+                rir_srcs_pad = np.concatenate((rir_srcs, zeros_pad), axis=2)  # (npt,nch,nsample,nsrc)
 
             if DRR:
-                # if DRRfromDataset:
-                #     DRR = DRRfromDataset[np.newaxis, 0, np.newaxis] # for real-world dataset with anotations
-                # else:
-                # Calculate DRR according to RIR and dp_RIR
                 nsamp = np.max([dp_rir_len, rir_len])
-                nd = np.argmax(rir_srcs_dp_pad, axis=2)  # (npoints,nch,nsources)
-                nd = np.tile(nd[:, :, np.newaxis, :], (1, 1, nsamp, 1))  # (npoints,nch,nsamples,nsources)
+                nd = np.argmax(rir_srcs_dp_pad, axis=2)  # (npt,nch,nsrc)
+                nd = np.tile(nd[:, :, np.newaxis, :], (1, 1, nsamp, 1))  # (npt,nch,nsample,nsrc)
                 n0 = int(fs * 2.5 / 1000) * np.ones_like(rir_srcs_pad)
                 whole_range = np.array(range(0, nsamp))
                 whole_range = np.tile(whole_range[np.newaxis, np.newaxis, :, np.newaxis], (rir_srcs_pad.shape[0], rir_srcs_pad.shape[1], 1, rir_srcs_pad.shape[3]))
@@ -969,21 +965,23 @@ class MicrophoneSignalOrRIR():
                 rev_range = np.ones_like(dp_range) - dp_range
                 dp_pow = np.sum(rir_srcs_pad**2 * dp_range, axis=2)
                 rev_pow = np.sum(rir_srcs_pad**2 * rev_range, axis=2)
-                DRR = 10 * np.log10(dp_pow / (rev_pow+eps)+eps)  # (npoints,nch,nsources)
-                DRR = DRR[:, 0, :]  # reference channel (npoints,nsources)
-                annos['DRR'] = DRR
-                if src_single_static:
-                    annos['DRR'] = DRR[0,0]
-                if sample_wise:
+                DRR = 10 * np.log10(dp_pow / (rev_pow+eps)+eps)  # (npt,nch,nsrc)
+                DRR = DRR[:, 0, :]  # reference channel (npt,nsrc)
+
+                if pt2sample:
                     annos['DRR'] = np.zeros((nsample, num_source))
                     for source_idx in range(num_source):
-                        annos['DRR'][:, source_idx] = np.interp(t, timestamps, DRR[:, source_idx])  # (nsample,nsource)
-                        # np.array([np.interp(t, timestamps, DRR[:,i,source_idx]) for i in range(nch)]).transpose() # (nsample,nch,nsource)
+                        annos['DRR'][:, source_idx] = np.interp(t, timestamps, DRR[:, source_idx])  # (nsample,nsrc)
+                        # np.array([np.interp(t, timestamps, DRR[:,i,source_idx]) for i in range(nch)]).transpose() # (nsample,nch,nsrc)
+                else:
+                    annos['DRR'] = DRR
+                    if src_single_static:
+                        annos['DRR'] = DRR[0,0]
 
             if C50:
                 nsamp = np.max([dp_rir_len, rir_len])
-                nd = np.argmax(rir_srcs_dp_pad, axis=2)  # (npoints,nch,nsources)
-                nd = np.tile(nd[:, :, np.newaxis, :], (1, 1, nsamp, 1))  # (npoints,nch,nsamples,nsources)
+                nd = np.argmax(rir_srcs_dp_pad, axis=2)  # (npt,nch,nsrc)
+                nd = np.tile(nd[:, :, np.newaxis, :], (1, 1, nsamp, 1))  # (npt,nch,nsample,nsrc)
                 n0 = int(fs * 50 / 1000) * np.ones_like(rir_srcs_pad)
                 whole_range = np.array(range(0, nsamp))
                 whole_range = np.tile(whole_range[np.newaxis, np.newaxis, :, np.newaxis], (rir_srcs_pad.shape[0], rir_srcs_pad.shape[1], 1, rir_srcs_pad.shape[3]))
@@ -992,20 +990,20 @@ class MicrophoneSignalOrRIR():
                 late_range = np.ones_like(early_range) - early_range
                 early_pow = np.sum(rir_srcs_pad**2 * early_range, axis=2)
                 late_pow = np.sum(rir_srcs_pad**2 * late_range, axis=2)
-                C50 = 10 * np.log10(early_pow / (late_pow + eps)+eps)  # (npoints,nch,nsources)
-                C50 = C50[:, 0, :]  # reference channel, (npoints,nsources)
+                C50 = 10 * np.log10(early_pow / (late_pow + eps)+eps)  # (npt,nch,nsrc)
+                C50 = C50[:, 0, :]  # reference channel, (npt,nsrc)
                 annos['C50'] = C50
                 if src_single_static:
                     annos['C50'] = C50[0,0]
-                if sample_wise:
+                if pt2sample:
                     annos['C50'] = np.zeros((nsample, num_source))
                     for source_idx in range(num_source):
-                        annos['C50'][:, source_idx] = np.interp(t, timestamps, C50[:, source_idx])  # (nsample,nsource)
+                        annos['C50'][:, source_idx] = np.interp(t, timestamps, C50[:, source_idx])  # (nsample,nsrc)
                 
             if C80:
                 nsamp = np.max([dp_rir_len, rir_len])
-                nd = np.argmax(rir_srcs_dp_pad, axis=2)  # (npoints,nch,nsources)
-                nd = np.tile(nd[:, :, np.newaxis, :], (1, 1, nsamp, 1))  # (npoints,nch,nsamples,nsources)
+                nd = np.argmax(rir_srcs_dp_pad, axis=2)  # (npt,nch,nsrc)
+                nd = np.tile(nd[:, :, np.newaxis, :], (1, 1, nsamp, 1))  # (npt,nch,nsample,nsrc)
                 n0 = int(fs * 80 / 1000) * np.ones_like(rir_srcs_pad)
                 whole_range = np.array(range(0, nsamp))
                 whole_range = np.tile(whole_range[np.newaxis, np.newaxis, :, np.newaxis], (rir_srcs_pad.shape[0], rir_srcs_pad.shape[1], 1, rir_srcs_pad.shape[3]))
@@ -1015,22 +1013,23 @@ class MicrophoneSignalOrRIR():
                 late_range = np.ones_like(early_range) - early_range
                 early_pow = np.sum(rir_srcs_pad**2 * early_range, axis=2)
                 late_pow = np.sum(rir_srcs_pad**2 * late_range, axis=2)
-                C80 = 10 * np.log10(early_pow / (late_pow + eps)+eps)  # (npoints,nch,nsources)
-                C80 = C80[:, 0, :]  # reference channel, (npoints,nsources)
-                annos['C80'] = C80
-                if src_single_static:
-                    annos['C80'] = C80[0,0]
-                if sample_wise:
+                C80 = 10 * np.log10(early_pow / (late_pow + eps)+eps)  # (npt,nch,nsrc)
+                C80 = C80[:, 0, :]  # reference channel, (npt,nsrc)
+                if pt2sample:
                     annos['C80']= np.zeros((nsample, num_source))
                     for source_idx in range(num_source):
-                        annos['C80'][:, source_idx] = np.interp(t, timestamps, C80[:, source_idx])  # (nsample,nsource)
+                        annos['C80'][:, source_idx] = np.interp(t, timestamps, C80[:, source_idx])  # (nsample,nsrc)
+                else: 
+                    annos['C80'] = C80
+                    if src_single_static:
+                        annos['C80'] = C80[0,0]
             
-            # Use the signal-to-noise ratio (dp_mic_signals/mic_signals) to compute the VAD
+            # Use the signal-to-noise ratio (dp_mic_sig/mic_sig) to compute the VAD
             # must combine with clean silence of source signals, to avoid the random results when a smaller value divided by a smaller value
             # the denominator is the mixed signals of multiple sources, which may be problematic when the number of sources is larger
             # segment-level results approximate to webrtc
-            if mic_vad: 
-                sig_len = mic_signals.shape[0]
+            if mic_vad and source_vad is False: 
+                sig_len = mic_sig.shape[0]
                 win_len = int(fs * 0.032) # 32ms 
                 win_shift_ratio = 1
                 nt = int((sig_len - win_len*(1-win_shift_ratio)) / (win_len*win_shift_ratio))
@@ -1040,16 +1039,16 @@ class MicrophoneSignalOrRIR():
                     st = int(t_idx * win_len * win_shift_ratio)
                     ed = st + win_len 
                     dp_mic_signal_sources_sch = mic_signal_srcs_dp[st:ed, 0, :]
-                    mic_signal_sources_sch = mic_signals[st:ed, 0]
+                    mic_signal_sources_sch = mic_sig[st:ed, 0]
                     win_engergy_ratio = np.sum(dp_mic_signal_sources_sch**2, axis=0) / (np.sum(mic_signal_sources_sch**2, axis=0) + eps) 
                     mic_vad_sources[st:ed, :] = win_engergy_ratio[np.newaxis, :].repeat(win_len, axis=0) 
                 annos['mic_vad'] = np.sum(mic_vad_sources, axis=1) #>= th
 
-            elif source_vad: 
+            if source_vad is not False and mic_vad is False: 
                 import gpuRIR
                 mic_vad_sources = []  # binary value, for vad of separate sensor signals of sources
                 for source_idx in range(num_source):
-                    if gpuConv:
+                    if gpu_conv:
                         vad = gpuRIR.simulateTrajectory(source_vad[:, source_idx], rir_srcs_dp[:, :, :, source_idx], timestamps=timestamps, fs=fs)
                     vad_sources = vad[0:nsample, :].mean(axis=1) > vad[0:nsample, :].max() * 1e-3
                     mic_vad_sources += [vad_sources] 
@@ -1122,10 +1121,10 @@ class RIRDataset(Dataset):
 
         return return_data
 
-    def rir_conv_src(self, rir, src_signal, gpuConv=False):
-        ''' rir : (npoint,nch,nsam,nsource)
+    def rir_conv_src(self, rir, src_signal, gpu_conv=False):
+        ''' rir : (npt,nch,nsam,nsrc)
         '''
-        if gpuConv:
+        if gpu_conv:
             import gpuRIR
 
         # Source conv. RIR
@@ -1133,10 +1132,12 @@ class RIRDataset(Dataset):
         num_source = rir.shape[-1]
         nsample = src_signal.shape[0]
         for source_idx in range(num_source):
-            rir_per_src = rir[:, :, :, source_idx]  # (npoint,nch,nsample）
+            rir_per_src = rir[:, :, :, source_idx]  # (npt,nch,nsample）
+            npts = rir_per_src.shape[0]
 
-            if gpuConv:
-                mic_sig_per_src = gpuRIR.simulateTrajectory(src_signal[:, source_idx], rir_per_src, timestamps=self.timestamps, fs=self.fs)
+            if gpu_conv:
+                timestamps = np.arange(npts) / npts * nsample / self.fs 
+                mic_sig_per_src = gpuRIR.simulateTrajectory(src_signal[:, source_idx], rir_per_src, timestamps=timestamps, fs=self.fs)
                 mic_sig_per_src = mic_sig_per_src[0:nsample, :]
 
             else:
@@ -1150,8 +1151,8 @@ class RIRDataset(Dataset):
 
             mic_signal_srcs += [mic_sig_per_src]
 
-        mic_signal_srcs = np.array(mic_signal_srcs).transpose(1, 2, 0)  # (nsamples,nch,nsources)
-        mic_signal = np.sum(mic_signal_srcs, axis=2)  # (nsamples, nch) 
+        mic_signal_srcs = np.array(mic_signal_srcs).transpose(1, 2, 0)  # (nsample,nch,nsrc)
+        mic_signal = np.sum(mic_signal_srcs, axis=2)  # (nsample, nch) 
  
         return mic_signal, mic_signal_srcs    
 
@@ -1216,8 +1217,8 @@ class MicSigFromRIRDataset(Dataset):
         src_sig = self.srcdataset[src_idx]
 
         # Generate clean or direct-path microphone signal
-        mic_sig_clean, mic_sig_srcs_clean = self.rirdataset.rir_conv_src(rir, src_sig)
-        mic_sig_dp, mic_sig_srcs_dp = self.rirdataset.rir_conv_src(rir_dp, src_sig)
+        mic_sig_clean, mic_sig_srcs_clean = self.rirdataset.rir_conv_src(rir, src_sig, gpu_conv=False)
+        mic_sig_dp, mic_sig_srcs_dp = self.rirdataset.rir_conv_src(rir_dp, src_sig, gpu_conv=False)
 
         # Generate noise signal
         noi_sig = self.noidataset.generate_random_noise(mic_pos=annos['mic_pos'])
@@ -1254,7 +1255,7 @@ class MicSigFromRIRDataset(Dataset):
                 'T60': annos['T60_edc'].astype(np.float32), 
                 'DRR': annos['DRR'].astype(np.float32),
                 'C50': annos['C50'].astype(np.float32),
-                'ABS': (0.161*vol/sur/annos['T60_edc']).astype(np.float32),
+                'ABS': np.array((0.161*vol/sur/annos['T60_edc'])).astype(np.float32),
                 }
             return mic_sig, annos     
         else:

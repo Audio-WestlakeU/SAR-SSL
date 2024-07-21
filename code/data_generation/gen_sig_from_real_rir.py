@@ -79,7 +79,6 @@ class RIRDataset(Dataset):
                 noise_signal = np.zeros((nsample, nmic))
             else:
                 noise_file = np.random.choice(noise_files, 1)[0]
-
                 noise_fs = soundfile.info(noise_file).samplerate
                 noise_duration = soundfile.info(noise_file).duration
                 nsample_noise = int(noise_duration * noise_fs)
@@ -399,7 +398,8 @@ if __name__ == '__main__':
         srcdataset = WSJ0Dataset(
             path = src_dir,
             T = args.T,
-            fs = args.fs
+            fs = args.fs,
+            num_source = 1
         )
 
         # RIR dataset

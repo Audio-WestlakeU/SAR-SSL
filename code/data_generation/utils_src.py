@@ -129,6 +129,9 @@ class LibriSpeechDataset(Dataset):
     """
 
     def _cleanSilences(self, s, aggressiveness, return_vad=False):
+        if not hasattr(self, 'vad') or self.vad is None:
+            self.vad = webrtcvad.Vad()
+
         self.vad.set_mode(aggressiveness)
 
         vad_out = np.zeros_like(s)
@@ -166,7 +169,6 @@ class LibriSpeechDataset(Dataset):
 
         self.clean_silence = clean_silence
         self.return_vad = return_vad
-        self.vad = webrtcvad.Vad()
 
         self.sz = len(self.chapterList) if size is None else size
 

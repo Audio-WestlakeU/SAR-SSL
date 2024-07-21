@@ -189,7 +189,7 @@ class RealMicSigDataset(Dataset):
         if self.fs != fs:
             mic_signals = scipy.signal.resample_poly(mic_signals, self.fs, fs)
 
-        return mic_signals
+        return [mic_signals]
 
 
 class RealMANDataset(RealMicSigDataset):
