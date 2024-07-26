@@ -6,7 +6,7 @@
     python gen_simu_certain_room.py --mode sig --stage test --room_num 20 --sig_num_each_rir 4 --src_dir ../../../data/SrcSig/wsj0 --save_to ../../data/MicSig/simu_ds 
 """
 import os
-cpu_num = 8*2
+cpu_num = 8
 os.environ["OMP_NUM_THREADS"] = str(cpu_num)
 os.environ['OMP_NUM_THREADS'] = str(cpu_num)
 os.environ['OPENBLAS_NUM_THREADS'] = str(cpu_num)
@@ -27,24 +27,13 @@ from pathlib import Path
 from utils_simu_rir_sig import *
 from utils_src import *
 from utils_noise import * 
-
-mic_array_cfg_specify_2ch = {
-    'array_type': 'planar_linear',
-    'array_scale_range': (0.3, 2), 
-    'array_rotate_azi_range': (0, 360), 
-    'mic_pos_relative': np.array(((-0.05, 0.0, 0.0),
-                        (0.05, 0.0, 0.0))),  
-    'mic_orV': np.array(((-1.0, 0.0, 0.0),
-                        (1.0, 0.0, 0.0))), 
-    'mic_pattern': 'omni',
-    'array_orV': np.array([0.0, 1.0, 0.0]),
-}
+from utils_array import *
 
 def GenerateRandomRIROfCertainRoom(
     room_sz_range: Union[List[Tuple[float, float]], np.ndarray]=[(3,15), (3,10), (2.5,6)], 
     T60_range: Tuple[float,float]=(0.2, 1.3), 
     abs_weights_range: List[Tuple[float, float]]=[(0.5,1)]*6, 
-    mic_array_cfg: Dict[str, Any]=mic_array_cfg_specify_2ch, 
+    mic_array_cfg: Dict[str, Any]=mic_array_cfg_2ch, 
     array_pos_ratio_range: Union[List[Tuple[float, float]], np.ndarray]=[(0.2,0.8), (0.2,0.8), (0.1,0.5)], 
     num_source_range: Tuple[int,int]=(1,1), 
     source_state: str='static', 
@@ -204,7 +193,7 @@ def GenerateRandomMicSigOfCertainRoom(
     room_sz_range: Union[List[Tuple[float, float]], np.ndarray]=[(3,15), (3,10), (2.5,6)], 
     T60_range: Tuple[float,float]=(0.2, 1.3), 
     abs_weights_range: List[Tuple[float, float]]=[(0.5,1)]*6, 
-    mic_array_cfg: Dict[str, Any]=mic_array_cfg_specify_2ch, 
+    mic_array_cfg: Dict[str, Any]=mic_array_cfg_2ch, 
     array_pos_ratio_range: Union[List[Tuple[float, float]], np.ndarray]=[(0.2,0.8), (0.2,0.8), (0.1,0.5)], 
     num_source_range: Tuple[int,int]=(1,1), 
     source_state: str='static', 

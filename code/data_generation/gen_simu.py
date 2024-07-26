@@ -12,7 +12,7 @@
         # python gen_simu.py --mode rir --stage test --data_num 20 --save_to ../../data/RIR/simu --gpus [0,1]
 """
 import os
-cpu_num = 8*5
+cpu_num = 8
 os.environ["OMP_NUM_THREADS"] = str(cpu_num)
 os.environ['OMP_NUM_THREADS'] = str(cpu_num)
 os.environ['OPENBLAS_NUM_THREADS'] = str(cpu_num)
@@ -33,40 +33,13 @@ from pathlib import Path
 from utils_simu_rir_sig import *
 from utils_src import *
 from utils_noise import * 
-
-mic_array_cfg_specify_2ch = {
-    'array_type': 'planar_linear',
-    'array_scale_range': (0.3, 2), 
-    'array_rotate_azi_range': (0, 360), 
-    'mic_pos_relative': np.array(((-0.05, 0.0, 0.0),
-                        (0.05, 0.0, 0.0))),  
-    'mic_orV': np.array(((-1.0, 0.0, 0.0),
-                        (1.0, 0.0, 0.0))), 
-    'mic_pattern': 'omni',
-    'array_orV': np.array([0.0, 1.0, 0.0]),
-}
-
-mic_array_cfg_specify_circular_4ch = {
-    'array_type': 'planar_linear',
-    'array_scale_range': (1, 1), 
-    'array_rotate_azi_range': (0, 0), 
-    'mic_pos_relative': np.array(((0.05, 0.0, 0.0),
-                        (0.0, 0.05, 0.0),
-                        (-0.05, 0.0, 0.0),
-                        (0.0, -0.05, 0.0))), 
-    'mic_orV': np.array(((1.0, 0.0, 0.0),
-                        (0.0, 1.0, 0.0),
-                        (-1.0, 0.0, 0.0), 
-                        (0.0, -1.0, 0.0))),
-    'mic_pattern': 'omni',
-    'array_orV': np.array([0.0, 1.0, 0.0]),
-}
+from utils_array import *
 
 def GenerateRandomRIR(
     room_sz_range: Union[List[Tuple[float, float]], np.ndarray]=[(3,15), (3,10), (2.5,6)], 
     T60_range: Tuple[float,float]=(0.2, 1.3), 
     abs_weights_range: List[Tuple[float, float]]=[(0.5,1)]*6, 
-    mic_array_cfg: Dict[str, Any]=mic_array_cfg_specify_2ch, 
+    mic_array_cfg: Dict[str, Any]=mic_array_cfg_2ch, 
     array_pos_ratio_range: Union[List[Tuple[float, float]], np.ndarray]=[(0.2,0.8), (0.2,0.8), (0.1,0.5)], 
     num_source_range: Tuple[int,int]=(1,1), 
     source_state: str='static', 
@@ -205,7 +178,7 @@ def GenerateRandomMicSig(
     room_sz_range: Union[List[Tuple[float, float]], np.ndarray]=[(3,15), (3,10), (2.5,6)], 
     T60_range: Tuple[float,float]=(0.2, 1.3), 
     abs_weights_range: List[Tuple[float, float]]=[(0.5,1)]*6, 
-    mic_array_cfg: Dict[str, Any]=mic_array_cfg_specify_2ch, 
+    mic_array_cfg: Dict[str, Any]=mic_array_cfg_2ch, 
     array_pos_ratio_range: Union[List[Tuple[float, float]], np.ndarray]=[(0.2,0.8), (0.2,0.8), (0.1,0.5)], 
     num_source_range: Tuple[int,int]=(1,1), 
     source_state: str='static', 

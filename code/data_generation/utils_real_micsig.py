@@ -26,33 +26,7 @@ def pad_cut_sig_sameutt(sig, nsample_desired):
     while nsample < nsample_desired:
         sig = np.concatenate((sig, sig), axis=0)
         nsample = sig.shape[0]
-    st = np.random.randint(0, nsample - nsample_desired)
-    ed = st + nsample_desired
-    sig_pad_cut = sig[st:ed]
-
-    return sig_pad_cut
-
-
-def pad_cut_sig_samespk(utt_path_list, current_utt_idx, nsample_desired, fs_desired):
-    """ Pad (by adding utterance of the same spearker) and cut signal to desired length
-        Args:       utt_path_list             - 
-                    current_utt_idx
-                    nsample_desired - desired sample length
-                    fs_desired
-        Returns:    sig_pad_cut     - padded and cutted signal (nsample_desired,)
-    """ 
-    sig = np.array([])
-    nsample = sig.shape[0]
-    while nsample < nsample_desired:
-        utterance, fs = soundfile.read(utt_path_list[current_utt_idx])
-        if fs != fs_desired:
-            utterance = scipy.signal.resample_poly(utterance, up=fs_desired, down=fs)
-            raise Warning(f'Signal is downsampled from {fs} to {fs_desired}')
-        sig = np.concatenate((sig, utterance), axis=0)
-        nsample = sig.shape[0]
-        current_utt_idx += 1
-        if current_utt_idx >= len(utt_path_list): current_utt_idx=0
-    st = np.random.randint(0, nsample - nsample_desired)
+    st = np.random.randint(0, nsample - nsample_desired+1)
     ed = st + nsample_desired
     sig_pad_cut = sig[st:ed]
 
@@ -72,7 +46,7 @@ def select_microphone_pairs(mic_poss, nmic_selected, mic_dist_range):
     for mic_pair_idxes in mic_pair_idxes_set:
         mic_pos = mic_poss[mic_pair_idxes, :]
         dist = np.sqrt(np.sum((mic_pos[0, :]-mic_pos[1, :])**2))
-        if ( (dist >= mic_dist_range[0]) | (dist <= mic_dist_range[1]) ):
+        if ( (dist >= mic_dist_range[0]) & (dist <= mic_dist_range[1]) ):
             mic_pair_idxes_selected += [mic_pair_idxes]
             mic_pos_selected += [mic_pos]
     assert (not mic_pair_idxes_selected)==False, f'No microphone pairs satisfy the microphone distance range {mic_dist_range}'
@@ -1058,7 +1032,6 @@ class AMIDataset(RealMicSigDataset):
         #                     ( 0.071, -0.071, 0.000)))}
         # for array in arrays:
         #     mic_idxes_selected[array], _ = select_microphone_pairs(mic_poss[array], nmic_selected, mic_dist_range)                       
-
 
         return mic_idxes_selected
 

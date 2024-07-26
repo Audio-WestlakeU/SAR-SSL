@@ -4,7 +4,6 @@ import math
 import scipy
 import scipy.io
 import scipy.signal
-import random 
 import soundfile
 import matplotlib.pyplot as plt
 from torch.utils.data import Dataset
@@ -31,7 +30,7 @@ def pad_cut_sig_sameutt(sig, nsample_desired):
     while nsample < nsample_desired:
         sig = np.concatenate((sig, sig), axis=0)
         nsample = sig.shape[0]
-    st = np.random.randint(0, nsample - nsample_desired)
+    st = np.random.randint(0, nsample - nsample_desired+1)
     ed = st + nsample_desired
     sig_pad_cut = sig[st:ed]
 
@@ -43,11 +42,12 @@ class NoiseSignal(Dataset):
         self.fs= fs
         self.nmic = nmic
         self.noise_type = noise_type 
+        assert noise_type in ['spatial_white', 'diffuse_white', 'diffuse_babble', 'diffuse_xsrc','real-world',''], 'Invalid noise type: '+ noise_type
         
-        if (noise_path != None) & ((noise_type=='diffuse_xsrc') | (noise_type=='real-world')):
+        if (noise_path != None) & ((noise_type=='diffuse_babble') | (noise_type=='diffuse_xsrc') | (noise_type=='real-world')):
             _, self.path_set = explore_corpus(noise_path, 'wav')
             # self.path_set.sort()
-        if (noise_type=='diffuse_xsrc') | (noise_type=='real-world'):
+        if (noise_type=='diffuse_babble') | (noise_type=='diffuse_xsrc') | (noise_type=='real-world'):
             self.sz = len(self.path_set) if size is None else size
         else:
             self.sz = 1 if size is None else size
@@ -78,7 +78,7 @@ class NoiseSignal(Dataset):
             noise_M = np.zeros([nsample_desired, M])
             for m in range(0, M):
                 noise = np.zeros((nsample_desired))
-                for idx in range(nspeech_babble):
+                for speech_idx in range(nspeech_babble):
                     idx = np.random.randint(0, len(self.path_set))
                     speech, fs = soundfile.read(self.path_set[idx], dtype='float32')
                     if fs != self.fs:
@@ -126,7 +126,7 @@ class NoiseSignal(Dataset):
                 noise_signal = scipy.signal.resample_poly(noise, up=self.fs, down=fs)
             noise_signal = noise_signal/(np.max(noise_signal)+eps)
                 
-        else:
+        elif self.noise_type == '':
             nsample_desired = int(self.T * self.fs)
             noise_signal = np.zeros((nsample_desired, self.nmic))
 
@@ -270,9 +270,3 @@ class NoiseSignal(Dataset):
         plt.title(str(1))
         # plt.show()
         plt.savefig(save_name)
-
-    
-
-
-
- 

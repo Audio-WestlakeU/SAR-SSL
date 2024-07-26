@@ -30,6 +30,43 @@ try:
 except:
     from data_generation.utils_src import *
 
+
+# @cache
+# def _search_files(dir, file_extension):
+#     # paths = list(Path(dir).rglob(f"*.{file_extension}"))
+#     # return [str(p) for p in paths]
+
+#     paths = []
+#     for item in os.listdir(dir):
+#         if os.path.isdir( os.path.join(dir, item) ):
+#             paths += self._search_files( os.path.join(dir, item), file_extension )
+#         elif item.split(".")[-1] == file_extension:
+#             paths += [os.path.join(dir, item)]
+#     return paths 
+
+# @cache
+# def _match(noise_dir, mic_attr_match,noise_type_specify=None):
+
+#     noise_paths = _search_files(dir=noise_dir, file_extension='wav')
+    
+#     match_paths = []
+#     for noise_path in noise_paths:
+#         wav_name = noise_path.split('/')[-1]
+#         noise_mic = wav_name.split('_')[1]
+#         noise_type = wav_name.split('_')[-1].split('.')[0]
+#         if noise_mic == mic_attr_match:
+#             if noise_type_specify is None:
+#                 match_paths += [noise_path]
+#             else:
+#                 if noise_type in noise_type_specify:
+#                     match_paths += [noise_path] 
+#     return match_paths     
+
+# @cache
+# def _match(noise_dir, mic_attr_match):
+#     noise_files = list(Path(noise_dir).rglob(f"*_{mic_attr_match}*.wav"))
+#     return noise_files 
+
 class RIRDataset(Dataset):
     def __init__(
         self, 
@@ -71,7 +108,7 @@ class RIRDataset(Dataset):
             rir_attrs = str(rir_file).split('/')
             mic_attr_match = rir_attrs[-1].split('_')[1].split('.')[0]
             noise_dir = str(rir_file.parent).replace(rir_attrs[-4], rir_attrs[-4]+'_noise')
-            # noise_files = self.__match(noise_dir, None, mic_attr_match)
+            # noise_files = _match(noise_dir, mic_attr_match)
             noise_files = list(Path(noise_dir).rglob(f"*_{mic_attr_match}*.wav"))
             if noise_files == []:
                 nmic = rir.shape[1]
@@ -84,7 +121,7 @@ class RIRDataset(Dataset):
                 nsample_noise = int(noise_duration * noise_fs)
                 nsample_desired = int(self.load_noise_duration * noise_fs)
                 assert nsample_noise>=nsample_desired, 'the sample number of noise signal is smaller than desired duration~'
-                st = np.random.randint(0, nsample_noise - nsample_desired)
+                st = np.random.randint(0, nsample_noise - nsample_desired+1)
                 ed = st + nsample_desired
                 noise_signal = soundfile.read(noise_file, start=st, stop=ed, dtype='float32')[0]
 
@@ -96,44 +133,6 @@ class RIRDataset(Dataset):
             return_data.append(info)
 
         return return_data
-    
-    # @cache
-    # def _search_files(self, dir, file_extension):
-    #     # paths = list(Path(dir).rglob(f"*.{file_extension}"))
-    #     # return [str(p) for p in paths]
-
-    #     paths = []
-    #     for item in os.listdir(dir):
-    #         if os.path.isdir( os.path.join(dir, item) ):
-    #             paths += self._search_files( os.path.join(dir, item), file_extension )
-    #         elif item.split(".")[-1] == file_extension:
-    #             paths += [os.path.join(dir, item)]
-    #     return paths
-
-    # @cache
-    # def _match(self, noise_dir,noise_type_specify,mic_attrs_match):
-    #     # if noise_type_specify is None:
-    #     #     paths = list(Path(noise_dir).rglob(f"*_{mic_attrs_match}*.wav"))   
-    #     # else:
-    #     #     match_paths = []
-    #     #     for noise_type in noise_type_specify:
-    #     #         paths = list(Path(noise_dir).rglob(f"*_{mic_attrs_match}_{noise_type}.wav"))
-    #     # match_paths = [str(p) for p in paths]
-
-    #     noise_paths = self._search_files(dir=noise_dir, file_extension='wav')
-        
-    #     match_paths = []
-    #     for noise_path in noise_paths:
-    #         wav_name = noise_path.split('/')[-1]
-    #         noise_mic = wav_name.split('_')[1]
-    #         noise_type = wav_name.split('_')[-1].split('.')[0]
-    #         if noise_mic == mic_attrs_match:
-    #             if noise_type_specify is None:
-    #                 match_paths += [noise_path]
-    #             else:
-    #                 if noise_type in noise_type_specify:
-    #                     match_paths += [noise_path] 
-    #     return match_paths     
 
     def rir_conv_src(self, rir, src_signal, gpuConv=False):
         ''' rir : (npoint,nch,nsam,nsource)

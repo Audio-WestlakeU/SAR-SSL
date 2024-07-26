@@ -44,6 +44,10 @@ A python implementation of “**<a href="https://arxiv.org/abs/2312.00476" targe
     |RealMAN    | 32 | A 32-channel high-precision array |
 
 ## Quick start
+### Version update
++ `code`: 202407: the results are testing (to be updated).
++ `code_v1`: 202402, the results are the same as the paper.
+
 ### Data generation
 **1. Download datasets to folders according to the following dictionary**    
   ```
@@ -136,16 +140,16 @@ A python implementation of “**<a href="https://arxiv.org/abs/2312.00476" targe
   - Pretext task: evaluation
     ```
     # * denotes the time version of pre-training model 
-    python run_pretrain.py --test --simu-exp --time * --gpu-id 0,
+    # --test-mode all: all or ins
+    python run_pretrain.py --test --simu-exp --time * --test-mode all --gpu-id 0, 
     ```
 
   - Downstream task: training
     ```
-    # --ds-nsimroom: 2, 4, 8, 16, 32, 64, 128 or 256
-    # --ds-task: TDOA, DRR, T60, C50, or ABS
+    # --ds-nsimroom: 2,4,8,16,32,64,128 or 256
+    # --ds-task: TDOA DRR T60 C50 or ABS
+    # --ds-trainmode: finetune, scratchLOW or lineareval
     python run_downstream.py --ds-train --ds-trainmode finetune --simu-exp --ds-nsimroom 8 --ds-task TDOA --time * --gpu-id 0, 
-    python run_downstream.py --ds-train --ds-trainmode scratchLOW --simu-exp --ds-nsimroom 8 --ds-task TDOA --time * --gpu-id 0, 
-    python run_downstream.py --ds-train --ds-trainmode lineareval --simu-exp --ds-nsimroom 8 --ds-task TDOA --time * --gpu-id 0, 
     ```
 
     | Stage | Trials   | nRooms | nRIRs/Room | nSrcSig/RIR | nMicSig |
@@ -165,9 +169,9 @@ A python implementation of “**<a href="https://arxiv.org/abs/2312.00476" targe
     ```
     # --ds-nsimroom: 2, 4, 8, 16, 32, 64, 128 or 256
     # --ds-task: TDOA, DRR, T60, C50, or ABS
-    python run_downstream.py --ds-test --ds-trainmode finetune --simu-exp --ds-nsimroom 8 --ds-task TDOA --time * --gpu-id 0, 
-    python run_downstream.py --ds-test --ds-trainmode scratchLOW --simu-exp --ds-nsimroom 8 --ds-task TDOA --time * --gpu-id 0, 
-    python run_downstream.py --ds-test --ds-trainmode lineareval --simu-exp --ds-nsimroom 8 --ds-task TDOA --time * --gpu-id 0, 
+    # --ds-trainmode: finetune, scratchLOW or lineareval
+    # --test_mode: cal_metric, cal_metric_wo_info or vis_embed
+    python run_downstream.py --ds-test --test_mode cal_metric --ds-trainmode finetune --simu-exp --ds-nsimroom 8 --ds-task TDOA --time * --gpu-id 0, 
     ```
 
 + Real-world experiments
@@ -177,25 +181,16 @@ A python implementation of “**<a href="https://arxiv.org/abs/2312.00476" targe
     ```
     python run_pretrain.py --pretrain --gpu-id 0, 
     ```
-  - Pretext task: evaluation
-    ```
-    # * denotes the time version of pre-training model 
-    python run_pretrain.py --test --time * --gpu-id 0,
-    ```
  
   - Downstream task: training
     ```
-    # ds-real-sim-ratio = 1 1, 1 0 or 0 1
+    # --ds-task: TDOA DRR T60 C50 or ABS
+    # --ds-trainmode: finetune, scratchLOW or lineareval
+    # --ds-real-sim-ratio = 1 1, 1 0 or 0 1
     python run_downstream.py --ds-train --ds-trainmode finetune --ds-real-sim-ratio 1 0 --ds-task TDOA --time * --gpu-id 0, 
     python run_downstream.py --ds-train --ds-trainmode scratchLOW --ds-real-sim-ratio 1 0 --ds-task TDOA --time * --gpu-id 0, 
     ```
-  - Downstream task: evaluation
-    ```
-    # ds-real-sim-ratio = 1 1, 1 0 or 0 1
-    python run_downstream.py --ds-test --ds-trainmode finetune --ds-real-sim-ratio 1 0 --ds-task TDOA --time * --gpu-id 0, 
-    python run_downstream.py --ds-test --ds-trainmode scratchLOW --ds-real-sim-ratio 1 0 --ds-task TDOA --time * --gpu-id 0,  
-    ```
-    read downstream results (MAEs of TDOA, DRR, T60, C50, SNR, ABS estimation) from saved mat files
+  - Downstream task: read downstream results (MAEs of TDOA, DRR, T60, C50, SNR, ABS estimation) from saved mat files
     ```
     python read_dsmat_bslr.py --time *
     python read_lossmetric_simdata.py
@@ -203,8 +198,10 @@ A python implementation of “**<a href="https://arxiv.org/abs/2312.00476" targe
     ```
 
 + **Trained models**
-  - best_model.tar
-  - ensemble_model.tar
+  - pretext task
+    - best_model.tar
+  - downstream task
+    - ensemble_model.tar
 
 ### Others
   If `OSError: [Errno 24] Too many open files` occurs, input the following at the command line
@@ -225,3 +222,19 @@ If you find our work useful in your research, please consider citing:
 
 ## Licence
 MIT
+
+
+<!-- 
+1. 仿真数据下游任务
+  - 原来：同样房间数量条件下，不同trial的srcsig相同
+  - 现在：不同房间数量条件下，不同trial的srcsig不同
+  - 影响结果，不影响结论（可能少许变化）
+2. 真实数据预训练
+  - 原来：真实micsig（from realrir） pretrain和preval使用的一样
+  - 现在: 已经更正成不一样的
+  - 不影响结果
+3. 真实数据预训练
+  - 原来：使用原始RealMAN数据集
+  - 现在：使用最终版RealMAN数据集
+  - train和val loss变小
+-->

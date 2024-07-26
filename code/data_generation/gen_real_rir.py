@@ -139,7 +139,7 @@ class DCASERIRDataset():
                                         Path(save_dir).mkdir(parents=True, exist_ok=True)
                                         file_name = 'SP'+ str(traj_idx+1)+ '-' + str(hei_idx+1)+ '-' + str(pt_idx+1) + '_MP' + '-' + str(mic_idxes[0]+1) + '-' + str(mic_idxes[1]+1) 
                                         save_file = os.path.join(save_dir, file_name + '.npy')
-                                        np.save(save_file, arr=RIRs.astype(np.float16))
+                                        np.save(save_file, arr=RIRs.astype(np.float32))
                                         save_file = os.path.join(save_dir, file_name + '_info.npz')
                                         data = {
                                             'room_sz': room_sz,
@@ -293,7 +293,7 @@ class MIRRIRDataset():
                                     Path(save_dir).mkdir(parents=True, exist_ok=True)
                                     file_name = 'SP'+ dist + '-' +  src + '_MP' + '-' + str(mic_idxes[0]+1) + '-' + str(mic_idxes[1]+1)
                                     save_file = os.path.join(save_dir, file_name + '.npy')
-                                    np.save(save_file, arr=RIRs.astype(np.float16)) # (npoints,nch,nsamples,nsources)
+                                    np.save(save_file, arr=RIRs.astype(np.float32)) # (npoints,nch,nsamples,nsources)
                                     save_file = os.path.join(save_dir, file_name + '_info.npz')
                                     data = {
                                         'room_sz': self.room_sz,
@@ -372,7 +372,7 @@ class MeshRIRDataset():
                         Path(save_dir).mkdir(parents=True, exist_ok=True)
                         file_name = 'SP'+ str(src_idx+1) + '_MP' + '-' + str(mic_idxes[0]+1) + '-' + str(mic_idxes[1]+1)
                         save_file = os.path.join(save_dir, file_name + '.npy')
-                        np.save(save_file, arr=RIRs.astype(np.float16)) # (npoints,nch,nsamples,nsources)
+                        np.save(save_file, arr=RIRs.astype(np.float32)) # (npoints,nch,nsamples,nsources)
                         save_file = os.path.join(save_dir, file_name + '_info.npz')
                         data = {
                             'room_sz': self.room_sz,
@@ -513,7 +513,7 @@ class dEchorateRIRDataset():
                                 Path(save_dir).mkdir(parents=True, exist_ok=True)
                                 file_name = 'SP'+ str(s_idx+1) + '_MP' + '-' + str(mic_idxes[0]+1) + '-' + str(mic_idxes[1]+1)
                                 save_file = os.path.join(save_dir, file_name + '.npy')
-                                np.save(save_file, arr=RIRs.astype(np.float16)) # (npoints,nch,nsamples,nsources)
+                                np.save(save_file, arr=RIRs.astype(np.float32)) # (npoints,nch,nsamples,nsources)
                                 save_file = os.path.join(save_dir, file_name + '_info.npz')
                                 data = {
                                     'room_sz': self.room_sz,
@@ -789,7 +789,7 @@ class BUTReverbRIRDataset():
                                 Path(save_dir).mkdir(parents=True, exist_ok=True)
                                 file_name = 'SP'+ spk_short + '_MP' + '-' + str(mic_idxes[0]+1) + '-' + str(mic_idxes[1]+1)
                                 save_file = os.path.join(save_dir, file_name + '.npy')
-                                np.save(save_file, arr=RIRs.astype(np.float16))
+                                np.save(save_file, arr=RIRs.astype(np.float32))
                                 save_file = os.path.join(save_dir, file_name + '_info.npz')
                                 data = {
                                     'room_sz': room_sz,
@@ -1109,7 +1109,7 @@ class ACERIRDataset():
                                 Path(save_dir).mkdir(parents=True, exist_ok=True)
                                 file_name = 'SP1_MP' + array_pos_name + '-' + str(mic_idxes[0]+1) + '-' + str(mic_idxes[1]+1)
                                 save_file = os.path.join(save_dir, file_name + '.npy')
-                                np.save(save_file, arr=RIRs.astype(np.float16))
+                                np.save(save_file, arr=RIRs.astype(np.float32))
                                 save_file = os.path.join(save_dir, file_name + '_info.npz')
                                 data = {
                                     'room_sz': room_sz,

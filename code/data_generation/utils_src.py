@@ -30,7 +30,7 @@ def pad_cut_sig_sameutt(sig, nsample_desired):
     while nsample < nsample_desired:
         sig = np.concatenate((sig, sig), axis=0)
         nsample = sig.shape[0]
-    st = np.random.randint(0, nsample - nsample_desired)
+    st = np.random.randint(0, nsample - nsample_desired+1)
     ed = st + nsample_desired
     sig_pad_cut = sig[st:ed]
 
@@ -56,7 +56,7 @@ def pad_cut_sig_samespk(utt_path_list, current_utt_idx, nsample_desired, fs_desi
         nsample = sig.shape[0]
         current_utt_idx += 1
         if current_utt_idx >= len(utt_path_list): current_utt_idx=0
-    st = np.random.randint(0, nsample - nsample_desired)
+    st = np.random.randint(0, nsample - nsample_desired+1)
     ed = st + nsample_desired
     sig_pad_cut = sig[st:ed]
 

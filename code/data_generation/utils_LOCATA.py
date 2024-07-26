@@ -9,6 +9,7 @@ import pandas as pd
 from typing import *
 from torch.utils.data import Dataset
 from abc import ABC, abstractmethod
+from functools import lru_cache, cache
 
 def pad_cut_sig_sameutt(sig, nsample_desired):
     """ Pad (by repeating the same utterance) and cut signal to desired length
@@ -20,38 +21,11 @@ def pad_cut_sig_sameutt(sig, nsample_desired):
     while nsample < nsample_desired:
         sig = np.concatenate((sig, sig), axis=0)
         nsample = sig.shape[0]
-    st = np.random.randint(0, nsample - nsample_desired)
+    st = np.random.randint(0, nsample - nsample_desired+1)
     ed = st + nsample_desired
     sig_pad_cut = sig[st:ed]
 
     return sig_pad_cut
-
-
-def pad_cut_sig_samespk(utt_path_list, current_utt_idx, nsample_desired, fs_desired):
-    """ Pad (by adding utterance of the same spearker) and cut signal to desired length
-        Args:       utt_path_list             - 
-                    current_utt_idx
-                    nsample_desired - desired sample length
-                    fs_desired
-        Returns:    sig_pad_cut     - padded and cutted signal (nsample_desired,)
-    """ 
-    sig = np.array([])
-    nsample = sig.shape[0]
-    while nsample < nsample_desired:
-        utterance, fs = soundfile.read(utt_path_list[current_utt_idx])
-        if fs != fs_desired:
-            utterance = scipy.signal.resample_poly(utterance, up=fs_desired, down=fs)
-            raise Warning(f'Signal is downsampled from {fs} to {fs_desired}')
-        sig = np.concatenate((sig, utterance), axis=0)
-        nsample = sig.shape[0]
-        current_utt_idx += 1
-        if current_utt_idx >= len(utt_path_list): current_utt_idx=0
-    st = np.random.randint(0, nsample - nsample_desired)
-    ed = st + nsample_desired
-    sig_pad_cut = sig[st:ed]
-
-    return sig_pad_cut
-
 
 
 class LOCATADataset(Dataset):
@@ -103,64 +77,49 @@ class LOCATADataset(Dataset):
     def __len__(self):
         return self.dataset_sz
 
-    def __getitem__(self, idx=None):
+    def __getitem__(self, idx=None, min_dura=1.1):
         idx = np.searchsorted(self.data_probs_cumsum, np.random.uniform())
         assert idx < len(self.data_items), [idx, len(self.data_items),self.data_items[0],len(self.data_probs_cumsum)]
-        wav_path, time_path, array_pos_path, src_pos_path, vad_path, mic_idxes, mic_pos, st_ed_ratio = self.data_items[idx]
+        wav_path, time_path, array_pos_path, src_pos_path, vad_path, mic_idxes, mic_pos, st_ed_ratio, sil_duration = self.data_items[idx]
 
-        duration = soundfile.info(wav_path).duration
+        duration = soundfile.info(wav_path).duration - sil_duration
         fs = soundfile.info(wav_path).samplerate
         nsample = int(duration * fs)
-        if self.load_anno:
-            t = (np.arange(nsample))/fs
-            TDOA = self.load_annotation(t, fs, self.sound_speed, mic_pos, time_path, array_pos_path, src_pos_path, vad_path=None)[0]
-
         nsample_desired = int(self.T * fs)
-        pad = False
-        if nsample<=nsample_desired:
-            mic_sig = self.read_micsig(wav_path, mic_idxes_selected=mic_idxes)
-            mic_sig = pad_cut_sig_sameutt(mic_sig, nsample_desired)
-            TDOA = pad_cut_sig_sameutt(TDOA, nsample_desired)
-            print('smaller number of samples')
-            nsample = mic_sig.shape[0]
-            duration = nsample/fs
-            pad = True
-
-        # Select T-second signal
-        if duration < 2.2:
-            print('signal length: ', duration)
-            raise Exception('Signal length is too short (LOCATA)')
-        elif (duration >= 2.2) & (duration < 10):
+        assert (nsample >= nsample_desired) & (duration >= (2*min_dura)), f'Signal length is too short (LOCATA): {nsample/fs}'
+        if (duration < 10):
             if (st_ed_ratio[0] + st_ed_ratio[1])/2 < 0.5:
                 st_ed_ratio = [0, 0.5]
             else:
                 st_ed_ratio = [0.5, 1]
-        st = np.random.randint(round(nsample*st_ed_ratio[0]), round(nsample*st_ed_ratio[1]) - nsample_desired)
+        st = np.random.randint(round(nsample*st_ed_ratio[0]+fs*sil_duration), round(nsample*st_ed_ratio[1]+fs*sil_duration) - nsample_desired)
         ed = st + nsample_desired
-        if pad:
-            mic_sig = mic_sig[st:ed, ...]
-        else:
-            mic_sig = self.read_micsig(wav_path, st=st, ed=ed, mic_idxes_selected=mic_idxes)
-        TDOA = TDOA[st:ed, ...]
- 
+
+        mic_sig = self.read_micsig(wav_path, st=st, ed=ed, mic_idxes_selected=mic_idxes)
         if self.fs != fs:
             mic_sig = scipy.signal.resample_poly(mic_sig, self.fs, fs)
-            TDOA = scipy.signal.resample_poly(TDOA, self.fs, fs)
 
+        t = np.arange(mic_sig.shape[0])/self.fs + st/fs
+        if self.load_anno:
+            TDOA = self.load_annotation(t, fs, self.sound_speed, mic_pos, time_path, array_pos_path, src_pos_path, vad_path=None)[0]
+        assert ((len(t) == len(mic_sig)) & (TDOA.shape[0]==len(mic_sig))), [len(t), len(mic_sig), TDOA.shape[0]]
+        
         if self.transforms is not None:
-            for t in self.transforms:
-                mic_sig = t(mic_sig)
-                TDOA = t(TDOA)
+            for trans in self.transforms:
+                mic_sig = trans(mic_sig)
+                if self.load_anno:
+                    TDOA = trans(TDOA)
 
         if self.src_single_static:
-            TDOA = np.mean(TDOA)
-
+            if self.load_anno:
+                TDOA = np.array(np.mean(TDOA))
+ 
         anno = {
             'TDOA': TDOA.astype(np.float32), 
-            'T60': np.NAN,  
-            'DRR': np.NAN,
-            'C50': np.NAN,
-            'ABS': np.NAN,
+            'T60': np.array(np.NAN),  
+            'DRR': np.array(np.NAN),
+            'C50': np.array(np.NAN),
+            'ABS': np.array(np.NAN),
             }
         if self.load_anno:
             return mic_sig.astype(np.float32), anno
@@ -185,6 +144,7 @@ class LOCATADataset(Dataset):
                         if array in arrays_list:
                             file_dir = os.path.join(task_path, recording, array)
                             wav_path = os.path.join(file_dir, 'audio_array_' + array + '.wav')
+                            sil_duration = self._calculate_silence_beginning(wav_path)
                             audio_duration = soundfile.info(wav_path).duration
                             time_path = os.path.join(file_dir, 'required_time.txt')
                             src_pos_path = [] 
@@ -210,7 +170,7 @@ class LOCATADataset(Dataset):
                                 nmicpair = len(mic_idxes_selected[array])
                                 for micpair_idx in range(nmicpair):
                                     data_items.append((wav_path, time_path, array_pos_path, src_pos_path, vad_path, 
-                                        mic_idxes_selected[array][micpair_idx], mic_pos_selected[array][micpair_idx], st_ed_ratio[stage]))
+                                        mic_idxes_selected[array][micpair_idx], mic_pos_selected[array][micpair_idx], st_ed_ratio[stage], sil_duration))
                                     if 'micpair' in prob_mode:
                                         data_probs.append(data_prob)
                                     else:
@@ -225,15 +185,24 @@ class LOCATADataset(Dataset):
 
         return data_items, data_probs_cumsum
 
+    def _calculate_silence_beginning(self, data_path, max_dura=4):
+        fs = soundfile.info(data_path).samplerate
+        mic_sig, _ = soundfile.read(data_path, start=0, stop=int(fs*max_dura), dtype='float32')
+        sil_duration = np.argmax(mic_sig[:,0] > mic_sig[:,0].max()*0.15) / fs
+        return sil_duration
+
+    # @cache
     def read_micsig(self, data_path, st=None, ed=None, mic_idxes_selected=None):
         if (st==None) & (ed==None):
-            mic_signals, _ = soundfile.read(data_path, dtype='float32')
+            mic_sig, _ = soundfile.read(data_path, dtype='float32')
         else:
-            mic_signals, _ = soundfile.read(data_path, start=st, stop=ed, dtype='float32')
-        mic_signals = mic_signals[:, mic_idxes_selected]
+            mic_sig, _ = soundfile.read(data_path, start=st, stop=ed, dtype='float32')
+        if mic_idxes_selected is not None:
+            mic_sig = mic_sig[:, mic_idxes_selected]
 
-        return mic_signals
+        return mic_sig
 
+    #@cache
     def load_annotation(self, t, fs, sound_speed, mic_pos, time_path, array_pos_path, src_pos_path, vad_path=None):
         return_data = []
  
@@ -392,7 +361,6 @@ class LOCATADataset(Dataset):
                             (-0.96, 0.00, 0.32)))}
         for array in arrays:
             mic_idxes_selected[array], mic_pos_selected[array] = self._select_microphone_pairs(mic_poss[array], nmic_selected, mic_dist_range)                       
-
         return mic_idxes_selected, mic_pos_selected
 
     def _select_microphone_pairs(self, mic_poss, nmic_selected, mic_dist_range):
@@ -409,7 +377,7 @@ class LOCATADataset(Dataset):
         for mic_pair_idxes in mic_pair_idxes_set:
             mic_pos = mic_poss[mic_pair_idxes, :]
             dist = np.sqrt(np.sum((mic_pos[0, :]-mic_pos[1, :])**2))
-            if ( (dist >= mic_dist_range[0]) | (dist <= mic_dist_range[1]) ):
+            if ( (dist >= mic_dist_range[0]) & (dist <= mic_dist_range[1]) ):
                 mic_pair_idxes_selected += [mic_pair_idxes]
                 mic_pos_selected += [mic_pos]
         assert (not mic_pair_idxes_selected)==False, f'No microphone pairs satisfy the microphone distance range {mic_dist_range}'
