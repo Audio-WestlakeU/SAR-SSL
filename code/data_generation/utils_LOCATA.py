@@ -35,20 +35,20 @@ class LOCATADataset(Dataset):
 	URL: https://www.locata.lms.tf.fau.de/datasets/, https://zenodo.org/record/3630471
 	"""
     def __init__(self, 
-                 data_dir: str, 
-                 T: float, 
-                 fs: int, 
-                 stage: str,  # 'train', 'val', 'test' 
-                 tasks: List[int] = [1,3,5], 
-                 arrays: List[str] = ['dicit', 'benchmark2', 'eigenmike'], 
-                 mic_dist_range: List[float] = [0.03, 0.20], 
-                 nmic_selected: int = 2, 
-                 prob_mode:List[str] = [''], #'duration', 'micpair'
-                 load_anno: bool = True,
-                 dataset_sz = None, 
-                 sound_speed: float = 343.0,
-                 src_single_static: bool = True,
-                 transforms: Callable = None):
+        data_dir: str, 
+        T: float, 
+        fs: int, 
+        stage: str,  # 'train', 'val', 'test' 
+        tasks: List[int] = [1,3,5], 
+        arrays: List[str] = ['dicit', 'benchmark2', 'eigenmike'], 
+        mic_dist_range: List[float] = [0.03, 0.20], 
+        nmic_selected: int = 2, 
+        prob_mode:List[str] = [''], #'duration', 'micpair'
+        load_anno: bool = True,
+        dataset_sz = None, 
+        sound_speed: float = 343.0,
+        src_single_static: bool = True,
+        transforms: Callable = None):
         
         self.room_sz = np.array([7.1, 9.8, 3])
 
@@ -110,16 +110,19 @@ class LOCATADataset(Dataset):
                 if self.load_anno:
                     TDOA = trans(TDOA)
 
+        max_value = np.max(np.abs(mic_sig))
+        mic_sig = mic_sig/max_value
+
         if self.src_single_static:
             if self.load_anno:
                 TDOA = np.array(np.mean(TDOA))
  
         anno = {
             'TDOA': TDOA.astype(np.float32), 
-            'T60': np.array(np.NAN),  
-            'DRR': np.array(np.NAN),
-            'C50': np.array(np.NAN),
-            'ABS': np.array(np.NAN),
+            # 'T60': np.array(np.NAN),  
+            # 'DRR': np.array(np.NAN),
+            # 'C50': np.array(np.NAN),
+            # 'ABS': np.array(np.NAN),
             }
         if self.load_anno:
             return mic_sig.astype(np.float32), anno
