@@ -6,7 +6,12 @@
 	Copyright Bing Yang
 
 	Examples:
-		python run_pretrain.py --pretrain --simu-exp --gpu-id 0, 
+		python run_pretrain.py --pretrain --simu-exp --gpu-id 0,
+
+		# * denotes the time version of pre-training model  
+		# --test-mode all: all or ins
+		python run_pretrain.py --test --simu-exp --time * --test-mode all --gpu-id 0, 
+
 		python run_pretrain.py --pretrain --gpu-id 0, 
 """
 
@@ -44,21 +49,20 @@ device = torch.device("cuda" if use_cuda else "cpu")
 set_seed(args.seed)
 
 # Save config file
-os.makedirs(dirs['log_pretrain'], exist_ok=True)
-file_path = os.path.join(dirs['log_pretrain'],"config.json")
-save_config_to_file([args.__dict__, dirs], file_path)
+if args.pretrain:
+	os.makedirs(dirs['log_pretrain'], exist_ok=True)
+	file_path = os.path.join(dirs['log_pretrain'],"config.json")
+	save_config_to_file([args.__dict__, dirs], file_path)
 
 # Acoustic setting parameters
 assert args.source_state == 'static', 'Source state model unrecognized~'
 nmic = args.acoustic_setting['nmic']
 speed = args.acoustic_setting['sound_speed']	
 fs = args.acoustic_setting['fs']
+T = args.acoustic_setting['T']
 mic_dist_range = args.acoustic_setting['mic_dist_range'] 
-seeds = {'train': int(args.seed+2e8), 'val': int(args.seed+1e8), 'test': int(args.seed+1)}
-
-T = 4.112  # Trajectory length (s) 2.064
-print('duration: ', T , 's')
-
+seeds = {'train': int(args.seed+4e8), 'val': int(args.seed+1e8), 'test': int(args.seed+1)} 
+ 
 # STFT parameters
 win_len = 512
 nfft = 512
@@ -66,7 +70,7 @@ win_shift_ratio = 0.5
 fre_used_ratio = 1
 nf = nfft//2
 nt = int((T * fs - win_len*(1-win_shift_ratio)) / (win_len*win_shift_ratio))
-print('nt, nf: ', nt, nf)
+print(f"T: {T:.3f}, nt: {nt}, nf: {nf}")
 
 # Network
 if args.pretrain | args.test:
@@ -82,14 +86,14 @@ flops_forward_eval, _ = get_FLOPs(net, input_shape=(1, nmic, nf, nt, nreim), dur
 print(f"FLOPs_forward: {flops_forward_eval:.2f}G/s")
 
 # Pre-Train
-if (args.pretrain):
+if args.pretrain:
 	
 	print('Pre-Training stage!')
 	num_stop_th = 1
 	nepoch = args.nepoch
 
 	# Dataset
-	data_num = {'train': 5120*100, 'val':4000, 'test':4000}
+	data_num = {'train': 5120*100, 'val':4000*2, 'test':4000*2}
 
 	remove_spkoverlap = True
 	prob_mode = ['duration', 'micpair']
@@ -97,12 +101,16 @@ if (args.pretrain):
 		dataset_pretrain = at_dataset.FixMicSigDataset( 
 			data_dir = dirs['micsig_simu_pretrain'], 
 			load_anno=False, 
+			load_dp=False,
+			fs = fs,
 			dataset_sz=data_num['train'],
 			transforms = None,
 			)
 		dataset_preval = at_dataset.FixMicSigDataset( 
 			data_dir = dirs['micsig_simu_preval'], 
 			load_anno=False, 
+			load_dp=False,
+			fs = fs,
 			dataset_sz=data_num['val'],
 			transforms = None,
 			)
@@ -171,7 +179,7 @@ if (args.pretrain):
 			mic_dist_range = mic_dist_range, 
 			nmic_selected = nmic, 
 			stage = 'test',
-			seed = seeds['test'],
+			# seed = seeds['test'],
 			dataset_sz = data_num['test'], 
 			transforms = None, 
 			prob_mode = prob_mode,
@@ -237,7 +245,7 @@ if (args.pretrain):
 			lr = lr_schedule(epoch)	
 		else:
 			lr = 0.0001
-
+			
 		set_random_seed(seeds['train']+epoch)
 		loss_train, diff_train, data_vis_train = learner.pretrain_epoch(dataloader_pretrain, lr=lr, epoch=epoch, return_diff=True)
 		if args.simu_exp:
@@ -249,7 +257,7 @@ if (args.pretrain):
 			loss_val_real, diff_val_real, data_vis_val_real = learner.pretest_epoch(dataloader_preval_real, return_diff=True)
 			set_random_seed(seeds['test'])
 			loss_test_locata, diff_test_locata, data_vis_test_locata = learner.pretest_epoch(dataloader_pretest_locata, return_diff=True)
-			# set_random_seed(seeds['test'])
+			set_random_seed(seeds['test'])
 			loss_test_ace, diff_test_ace, data_vis_test_ace = learner.pretest_epoch(dataloader_pretest_ace, return_diff=True)
 
 			print('Val loss real: {:.4f}'.format(loss_val_real) )
@@ -297,11 +305,6 @@ if (args.pretrain):
 				os.makedirs(data_path)
 			vis_train = vis_time_fre_data(data_vis_train, ins_idx=1)
 			vis_train.savefig(data_path + str(epoch) + '_train')
-			# vis_test = vis_time_fre_data(data_vis_test, ins_idx=1)
-			# vis_test.savefig(data_path + str(epoch) + '_test')
-
-			# soundfile.write(data_path, mic_sig, fs)
-			# scipy.io.savemat(data_path + '_' + str(epoch) + '.mat', data_vis_train)
 		
 		if stop_flag:
 			break
@@ -321,19 +324,23 @@ if (args.pretrain_frozen_encoder):
 	dataset_pretrain = at_dataset.FixMicSigDataset( 
 		data_dir = dirs['micsig_simu_pretrain'], 
 		load_anno=False, 
+		load_dp=False,
+		fs = fs,
 		dataset_sz=data_num['train'],
 		transforms = None,
 		)
 	dataset_preval = at_dataset.FixMicSigDataset( 
 		data_dir = dirs['micsig_simu_preval'], 
 		load_anno=False, 
+		load_dp=False,
+		fs = fs,
 		dataset_sz=data_num['val'],
 		transforms = None,
 		)
 
 	kwargs = {'num_workers': args.workers, 'pin_memory': True}  if use_cuda else {}
 	dataloader_pretrain = torch.utils.data.DataLoader(dataset=dataset_pretrain, batch_size=args.bs[0], shuffle=True, **kwargs)
-	dataloader_preval_sim = torch.utils.data.DataLoader(dataset=dataset_preval_sim, batch_size=args.bs[1], shuffle=False, **kwargs)
+	dataloader_preval_sim = torch.utils.data.DataLoader(dataset=dataset_preval, batch_size=args.bs[1], shuffle=False, **kwargs)
 
 	# Learner
 	learner = at_learner.STFTLearner(net, win_len=win_len, win_shift_ratio=win_shift_ratio, nfft=nfft, fre_used_ratio=fre_used_ratio, fs=fs, task=None, ch_mode='M')
@@ -394,17 +401,11 @@ if (args.pretrain_frozen_encoder):
 
 	print('\nFrozen Pre-Training finished\n')
 
-
 # Test
 if (args.test):
-	#########################
-	# test_mode = 'all'
-	test_mode = 'ins'
-	######################### 
 	print('Test data from ', dirs['micsig_simu_pretest'])
 	assert args.simu_exp == True, 'Test mode only for simulated data'
-
-	T = 4.112  # Time duration (s) 
+ 
 	kwargs = {'num_workers': args.workers, 'pin_memory': True} if use_cuda else {}
 
 	# learner
@@ -419,14 +420,16 @@ if (args.test):
 		learner.amp()
 	epoch = learner.load_checkpoint_best(checkpoints_dir=dirs['log_pretrain'], as_all_state=True) # best checkpoints
 	
-	if test_mode == 'all':
+	if args.test_mode == 'all':
 		set_seed(args.seed)
 		
 		# Dataset
 		dataset_pretest = at_dataset.FixMicSigDataset( 
 			data_dir = dirs['micsig_simu_pretest'], 
 			load_anno=False, 
-			dataset_sz=2560*2,
+			load_dp=False,
+			fs=fs,
+			dataset_sz=4000,
 			transforms = None,
 			)
 		dataloader_pretest = torch.utils.data.DataLoader(dataset=dataset_pretest, batch_size=args.bs[2], shuffle=False, **kwargs)
@@ -434,33 +437,33 @@ if (args.test):
 		# Test
 		loss_test, diff_test, data_vis_test = learner.pretest_epoch(dataloader_pretest, return_diff=True)
 
-		print(' Test loss: {:.4f}'.format(loss_test) )
+		print('Test loss: {:.4f}'.format(loss_test) )
 
-	elif test_mode == 'ins':
+	elif args.test_mode == 'ins':
 		for dir_pretest in dirs['micsig_simu_pretest_ins']:
 			set_seed(args.seed)
 			
 			# Dataset
-			return_data =  ['sig', 'dp_mic_signal']	
 			dataset_pretest = at_dataset.FixMicSigDataset( 
-				data_dir_list = [dir_pretest],
-				dataset_sz = None,
-				transforms = [selecting, segmenting],
-				return_data = return_data)
+				data_dir = dirs['micsig_simu_pretest_ins'],
+				load_anno=False, 
+				load_dp=True,
+				dataset_sz=None,
+				fs=fs,
+				transforms=None)
 			dataloader_pretest = torch.utils.data.DataLoader(dataset=dataset_pretest, batch_size=len(dataset_pretest), shuffle=False, **kwargs)
 
 			# Test
 			loss_test, diff_test, data_vis_test, results_test = learner.pretest_epoch(dataloader_pretest, return_diff=True, return_eval=True)
 
 			name_pretest = dir_pretest.split('/')[-1]
-			print(name_pretest, ' Test loss: {:.4f}'.format(loss_test) )
+			print(name_pretest, 'Test loss: {:.4f}'.format(loss_test) )
 	
 			data_path = dirs['log_pretrain'] + '/test_result/'
 			exist_flag = os.path.exists(data_path)
 			if exist_flag==False:
 				os.makedirs(data_path)
-			# vis_train = vis_time_fre_data(data_vis_train, ins_idx=1)
-			# vis_train.savefig(data_path + str(epoch) + '_train')
+ 
 			rt = dir_pretest.split('T')[-1]
 			keys = data_vis_test.keys()
 			for key in keys:
@@ -472,10 +475,10 @@ if (args.test):
 				soundfile.write(data_path + 'rt'+ rt + '_ins' + str(ins_idx) + '_epoch' + str(epoch) + '_test_tar.wav', results_test['sig_tar'][ins_idx, :, :].cpu().detach().numpy(), fs)
 
 			scipy.io.savemat(data_path + 'rt'+ rt + '_ins' + '_epoch' + str(epoch) + '_test.mat', 
-		     				{'mask': data_vis_test['mask'].cpu().detach().numpy(),
-	    					'pred': data_vis_test['pred'].cpu().detach().numpy(),
-						    'tar': data_vis_test['tar'].cpu().detach().numpy(),
-						    'dp_tar': data_vis_test['dp_tar'].cpu().detach().numpy(),
-							'pesq': results_test['pesq'].cpu().detach().numpy(),
-							'pesq_mask_ch': results_test['pesq_mask_ch'].cpu().detach().numpy()})
+				{'mask': data_vis_test['mask'].cpu().detach().numpy(),
+				'pred': data_vis_test['pred'].cpu().detach().numpy(),
+				'tar': data_vis_test['tar'].cpu().detach().numpy(),
+				# 'dp_tar': data_vis_test['dp_tar'].cpu().detach().numpy(),
+				'pesq': results_test['pesq'].cpu().detach().numpy(),
+				'pesq_mask_ch': results_test['pesq_mask_ch'].cpu().detach().numpy()})
 		

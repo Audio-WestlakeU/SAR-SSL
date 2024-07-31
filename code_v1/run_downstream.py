@@ -6,9 +6,6 @@ History:    2024-02 - Initial version
 Copyright Bing Yang
 python run_downstream.py --ds-train --ds-trainmode finetune --ds-real-sim-ratio  1 0 --ds-task TDOA --time 05200250 --gpu-id 0, 
 python run_downstream.py --ds-train --ds-trainmode scratchLOW --ds-real-sim-ratio  1 0 --ds-task TDOA --time 05200200 --gpu-id 0, 
-
-python run_downstream.py --ds-train --ds-trainmode finetune --ds-real-sim-ratio  1 0 --ds-task TDOA --time 05200250inf --gpu-id 0, --work-dir "/home/yangbing/image"
-python run_downstream.py --ds-train --ds-trainmode scratchLOW --ds-real-sim-ratio  1 0 --ds-task TDOA --time 05200200inf --gpu-id 0, --work-dir "/home/yangbing/image"
 """
 
 import os

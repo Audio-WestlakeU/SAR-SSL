@@ -42,8 +42,8 @@ class opt_pretrain():
 
         # Pretrain: simulated or real-world
         ##########################################
-        self.pretrain_sim = True
-        # self.pretrain_sim = False
+        # self.pretrain_sim = True
+        self.pretrain_sim = False
         
         ##########################################
 
@@ -130,17 +130,13 @@ class opt_pretrain():
         dirs['ACE'] = dirs['data'] + '/RIR/ACE'
         
         dirs['LOCATA'] = dirs['data'] + '/MicSig/LOCATA'
-        dirs['CHiME3'] = dirs['data'] + '/MicSig/CHiME3'
         dirs['MCWSJ'] = dirs['data'] + '/MicSig/MC_WSJ_AV'
         dirs['LibriCSS'] = dirs['data'] + '/MicSig/LibriCSS'
         dirs['AMI'] = dirs['data'] + '/MicSig/AMI'
         dirs['AISHELL4'] = dirs['data'] + '/MicSig/AISHELL-4'
         dirs['M2MeT'] = dirs['data'] + '/MicSig/M2MeT'
-        # dirs['CHiME56'] = dirs['data'] + '/SenSig/CHiME5_6'
-        # dirs['Our'] = dirs['data'] + '/SenSig/aligned_static_high_精细对齐_correctDPRIR_filtered3'
+        dirs['RealMANOri'] = dirs['data'] + '/MicSig/aligned_static_high_精细对齐_correctDPRIR_filtered3'
         dirs['RealMAN'] = dirs['data'] + '/MicSig/RealMAN'
-        # dirs['HI-MIA'] = dirs['data'] + '/SenSig/HI-MIA'
-        # dirs['AV163'] = dirs['data'] + '/SenSig/AV16.3'
 
         ## Generated mic signal
         dirs_pretrain = dirs['gerdata'] + '/SenSig-pretrain' + self.sig_ver

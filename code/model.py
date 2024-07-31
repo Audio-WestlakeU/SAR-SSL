@@ -355,8 +355,7 @@ class SARSSL(nn.Module):
         # patch_shape=(256,1), maskedpatch_mode='T'
         super(SARSSL, self).__init__()
         
-        nf, nt, nreim, nmic = sig_shape
-        print('patch_shape: ', patch_shape)
+        nf, nt, nreim, nmic = sig_shape 
         npatch_shape = [int(nf / patch_shape[0]), int(nt / patch_shape[1])]
         dpatch = patch_shape[0] * patch_shape[1]
         if nmasked_patch != (npatch_shape[0]*npatch_shape[1]//2):
@@ -381,7 +380,6 @@ class SARSSL(nn.Module):
         self.in_ver = 'separate' # separate mask for spatial and spectral encoders
         # self.in_ver = 'same' # same mask for spatial and spectral encoders
         # self.in_ver = 'single_ch_each_patch' 
-        print('version:', self.in_ver)
 
         if f_first:
             ## MC-Conformer (CNN_Fre_First+Conformer)

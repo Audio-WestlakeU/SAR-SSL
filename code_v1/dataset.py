@@ -675,7 +675,7 @@ class NoiseDataset(Dataset):
             noise = pad_cut_sig_sameutt(noise, nsample_desired)
 
             if fs != self.fs:
-                noise_copy = scipy.signal.resample_poly(noise_copy, up=self.fs, down=fs)
+                noise = scipy.signal.resample_poly(noise, up=self.fs, down=fs)
 
             # Generate M mutually 'independent' input signals
             M = mic_pos.shape[0]
@@ -754,7 +754,7 @@ class NoiseDataset(Dataset):
             nsample_desired = int(self.T * fs)
             noise = pad_cut_sig_sameutt(noise, nsample_desired)
             if fs != self.fs:
-                noise_signal = scipy.signal.resample_poly(noise_copy, up=self.fs, down=fs)
+                noise_signal = scipy.signal.resample_poly(noise, up=self.fs, down=fs)
             noise_signal = noise_signal/(np.max(noise_signal)+eps)
                 
         else:
@@ -1035,7 +1035,7 @@ class RIRDataset(Dataset):
         return self.dataset_sz
 
     def __getitem__(self, idx):
-        i = copy.deepcopy(idx)
+
         if self.prob_ratio_list is None: 
             idx = np.random.randint(0, self.dataset_sz)
         else:

@@ -89,17 +89,17 @@ class RandomRealDataset(Dataset):
                 dataset_sz = None, 
                 # remove_spkoverlap = remove_spkoverlap
                 )
-        self.chime3 = CHiME3Dataset(
-                data_dir = data_dirs['CHiME3'],
-                T = T,
-                fs = fs,
-                dataset = dataset, 
-                mic_dist_range = mic_dist_range,
-                nmic_selected = nmic_selected,
-                prob_mode = prob_mode,
-                dataset_sz = None, 
-                # remove_spkoverlap = remove_spkoverlap
-                )
+        # self.chime3 = CHiME3Dataset(
+        #         data_dir = data_dirs['CHiME3'],
+        #         T = T,
+        #         fs = fs,
+        #         dataset = dataset, 
+        #         mic_dist_range = mic_dist_range,
+        #         nmic_selected = nmic_selected,
+        #         prob_mode = prob_mode,
+        #         dataset_sz = None, 
+        #         # remove_spkoverlap = remove_spkoverlap
+        #         )
         self.ami = AMIDataset(
                 data_dir = data_dirs['AMI'],
                 T = T,
@@ -142,27 +142,27 @@ class RandomRealDataset(Dataset):
                 dataset_sz = None)
         # if np.sum(ds_probs[1])>0:
         num_wavs = 150000 # pretrain
-        data_dir = [element for element in data_dirs['sensig_pretrain'] if 'DCASE' in element][0]
+        data_dir = [element for element in data_dirs['sensig_pre'+dataset] if 'DCASE' in element][0]
         self.dcase = RealDataset_MeasuredRIR(
             data_dir = data_dir,
             dataset_sz = num_wavs)
-        data_dir = [element for element in data_dirs['sensig_pretrain'] if 'MIR' in element][0]
+        data_dir = [element for element in data_dirs['sensig_pre'+dataset] if 'MIR' in element][0]
         self.mir = RealDataset_MeasuredRIR(
             data_dir = data_dir,
             dataset_sz = num_wavs)
-        data_dir = [element for element in data_dirs['sensig_pretrain'] if 'Mesh' in element][0]
+        data_dir = [element for element in data_dirs['sensig_pre'+dataset] if 'Mesh' in element][0]
         self.mesh = RealDataset_MeasuredRIR(
             data_dir = data_dir,
             dataset_sz = num_wavs)
-        data_dir = [element for element in data_dirs['sensig_pretrain'] if 'ACE' in element][0]
+        data_dir = [element for element in data_dirs['sensig_pre'+dataset] if 'ACE' in element][0]
         self.ace = RealDataset_MeasuredRIR(
             data_dir = data_dir,
             dataset_sz = num_wavs)
-        data_dir = [element for element in data_dirs['sensig_pretrain'] if 'dEchorate' in element][0]
+        data_dir = [element for element in data_dirs['sensig_pre'+dataset] if 'dEchorate' in element][0]
         self.dechorate = RealDataset_MeasuredRIR(
             data_dir = data_dir,
             dataset_sz = num_wavs)
-        data_dir = [element for element in data_dirs['sensig_pretrain'] if 'BUTReverb' in element][0]
+        data_dir = [element for element in data_dirs['sensig_pre'+dataset] if 'BUTReverb' in element][0]
         self.butreverb = RealDataset_MeasuredRIR(
             data_dir = data_dir,
             dataset_sz = num_wavs)
@@ -191,8 +191,8 @@ class RandomRealDataset(Dataset):
                 self.ds_list += [self.mcwsj]
             elif ds == 'libricss':
                 self.ds_list += [self.libricss]
-            elif ds == 'chime3':
-                self.ds_list += [self.chime3]
+            # elif ds == 'chime3':
+            #     self.ds_list += [self.chime3]
             elif ds == 'ami':
                 self.ds_list += [self.ami]
             elif ds == 'aishell4':
@@ -604,7 +604,7 @@ class RealMANDataset(RealDataset):
         return vec
 
 
-class RealMANDatasetOri(RealDataset):
+class RealMANOriDataset(RealDataset):
     """ 
 	    urls:  https://github.com/Audio-WestlakeU/RealMAN
 	"""
@@ -742,8 +742,8 @@ class RealMANDatasetOri(RealDataset):
         pos_rcv[27, :] = np.array([-R * 4, 0, 0])
 
         L = 0.045
-        pos_rcv[28, :] = np.array([0, 0, L])
-        pos_rcv[29, :] = np.array([0, 0, L * 2])
+        pos_rcv[28, :] = np.array([0, 0, L * 2])
+        pos_rcv[29, :] = np.array([0, 0, L])
         pos_rcv[30, :] = np.array([0, 0, -L])
         pos_rcv[31, :] = np.array([0, 0, -L * 2])
 
@@ -1935,56 +1935,56 @@ if __name__ == '__main__':
     #     print(sig.shape)
     
 
-    # sig_dir = dirs['LOCATA']
-    # dataset = LOCATADataset(
-	# 			data_dir = sig_dir,
-	# 			T = 4.112,
-	# 			fs = 16000,
-	# 			dataset = 'train',
-	# 			# tasks = [1],
-	# 			# arrays = ['benchmark2'],
-	# 			mic_dist_range = [0.05, 20],
-	# 			dataset_sz = 10
-	# 		)
-    # _, total_duration = dataset.duration()
-    # print('LOCATA: ', total_duration, 'h')
-    # # for i in range(10):
-    # #     sig = dataset[i]
-    # #     print(sig.shape)
+    sig_dir = dirs['LOCATA']
+    dataset = LOCATADataset(
+				data_dir = sig_dir,
+				T = 4.112,
+				fs = 16000,
+				dataset = 'train',
+				# tasks = [1],
+				# arrays = ['benchmark2'],
+				mic_dist_range = [0.05, 20],
+				dataset_sz = 10
+			)
+    _, total_duration = dataset.duration()
+    print('LOCATA: ', total_duration, 'h')
+    # for i in range(10):
+    #     sig = dataset[i]
+    #     print(sig.shape)
 
-    # sig_dir = dirs['MCWSJ']
-    # dataset = MCWSJDataset(
-	# 			data_dir = sig_dir,
-	# 			T = 4.112,
-	# 			fs = 16000,
-	# 			dataset = 'train',
-	# 			# tasks = ['stat'],
-	# 			# arrays = ['array1', 'array2'],
-	# 			mic_dist_range = [0.05, 20],
-	# 			dataset_sz = 10
-	# 		)
-    # _, total_duration = dataset.duration()
-    # print('MCWSJ: ', total_duration, 'h')
-    # # for i in range(10):
-    # #     sig = dataset[i]
-    # #     print(sig.shape)
+    sig_dir = dirs['MCWSJ']
+    dataset = MCWSJDataset(
+				data_dir = sig_dir,
+				T = 4.112,
+				fs = 16000,
+				dataset = 'train',
+				# tasks = ['stat'],
+				# arrays = ['array1', 'array2'],
+				mic_dist_range = [0.05, 20],
+				dataset_sz = 10
+			)
+    _, total_duration = dataset.duration()
+    print('MCWSJ: ', total_duration, 'h')
+    # for i in range(10):
+    #     sig = dataset[i]
+    #     print(sig.shape)
 
-    # sig_dir = dirs['LibriCSS']
-    # dataset = LibriCSSDataset(
-	# 			data_dir = sig_dir,
-	# 			T = 4.112,
-	# 			fs = 16000,
-	# 			dataset = 'train',
-	# 			# tasks = ['stat'],
-	# 			# arrays = ['array1', 'array2'],
-	# 			mic_dist_range = [0.05, 20],
-	# 			dataset_sz = 10
-	# 		)
-    # _, total_duration = dataset.duration()
-    # print('LibriCSS: ', total_duration, 'h')
-    # # for i in range(10):
-    # #     sig = dataset[i]
-    # #     print(sig.shape)
+    sig_dir = dirs['LibriCSS']
+    dataset = LibriCSSDataset(
+				data_dir = sig_dir,
+				T = 4.112,
+				fs = 16000,
+				dataset = 'train',
+				# tasks = ['stat'],
+				# arrays = ['array1', 'array2'],
+				mic_dist_range = [0.05, 20],
+				dataset_sz = 10
+			)
+    _, total_duration = dataset.duration()
+    print('LibriCSS: ', total_duration, 'h')
+    # for i in range(10):
+    #     sig = dataset[i]
+    #     print(sig.shape)
 
     # sig_dir = dirs['CHiME3']
     # dataset = CHiME3Dataset(
@@ -2003,55 +2003,55 @@ if __name__ == '__main__':
     # #     sig = dataset[i]
     # #     print(sig.shape)
 
-    # sig_dir = dirs['AMI']
-    # dataset = AMIDataset(
-	# 			data_dir = sig_dir,
-	# 			T = 4.112,
-	# 			fs = 16000,
-	# 			dataset = 'train',
-	# 			# tasks = ['stat'],
-	# 			# arrays = ['array1', 'array2'],
-	# 			mic_dist_range = [0.05, 20],
-	# 			dataset_sz = 10
-	# 		)
-    # _, total_duration = dataset.duration()
-    # print('AMI: ', total_duration, 'h')
-    # # for i in range(100):
-    # #     sig = dataset[i]
-    # #     print(sig.shape)
+    sig_dir = dirs['AMI']
+    dataset = AMIDataset(
+				data_dir = sig_dir,
+				T = 4.112,
+				fs = 16000,
+				dataset = 'train',
+				# tasks = ['stat'],
+				# arrays = ['array1', 'array2'],
+				mic_dist_range = [0.05, 20],
+				dataset_sz = 10
+			)
+    _, total_duration = dataset.duration()
+    print('AMI: ', total_duration, 'h')
+    # for i in range(100):
+    #     sig = dataset[i]
+    #     print(sig.shape)
     
-    # sig_dir = dirs['AISHELL4']
-    # dataset = AISHELL4Dataset(
-	# 			data_dir = sig_dir,
-	# 			T = 4.112,
-	# 			fs = 16000,
-	# 			dataset = 'train',
-	# 			# tasks = ['stat'],
-	# 			# arrays = ['array1', 'array2'],
-	# 			mic_dist_range = [0.05, 20],
-	# 			dataset_sz = 10,
-    #           remove_spkoverlap = True,
-	# 		)
-    # _, total_duration = dataset.duration()
-    # print('AISHELL4: ', total_duration, 'h')
-    # # for i in range(10):
-    # #     sig = dataset[i]
-    # #     print(sig.shape)
+    sig_dir = dirs['AISHELL4']
+    dataset = AISHELL4Dataset(
+				data_dir = sig_dir,
+				T = 4.112,
+				fs = 16000,
+				dataset = 'train',
+				# tasks = ['stat'],
+				# arrays = ['array1', 'array2'],
+				mic_dist_range = [0.05, 20],
+				dataset_sz = 10,
+              remove_spkoverlap = True,
+			)
+    _, total_duration = dataset.duration()
+    print('AISHELL4: ', total_duration, 'h')
+    # for i in range(10):
+    #     sig = dataset[i]
+    #     print(sig.shape)
 
-    # sig_dir = dirs['M2MeT']
-    # dataset = M2MeTDataset(
-	# 			data_dir = sig_dir,
-	# 			T = 4.112,
-	# 			fs = 16000,
-	# 			dataset = 'train',
-	# 			# tasks = ['stat'],
-	# 			# arrays = ['array1', 'array2'],
-	# 			mic_dist_range = [0.05, 20],
-	# 			dataset_sz = 100,
-    #             remove_spkoverlap = False,
-	# 		)
-    # _, total_duration = dataset.duration()
-    # print('M2Met: ', total_duration, 'h')
+    sig_dir = dirs['M2MeT']
+    dataset = M2MeTDataset(
+				data_dir = sig_dir,
+				T = 4.112,
+				fs = 16000,
+				dataset = 'train',
+				# tasks = ['stat'],
+				# arrays = ['array1', 'array2'],
+				mic_dist_range = [0.05, 20],
+				dataset_sz = 100,
+                remove_spkoverlap = False,
+			)
+    _, total_duration = dataset.duration()
+    print('M2Met: ', total_duration, 'h')
     # for i in range(100000):
     #     sig = dataset[i]
     #     print(sig.shape)
@@ -2085,6 +2085,22 @@ if __name__ == '__main__':
 			)
     _, total_duration = dataset.duration()
     print('RealMAN: ', total_duration, 'h')
+    for i in range(10):
+        sig = dataset[i]
+        print(sig.shape) 
+
+    sig_dir = dirs['RealMANOri']
+    dataset = RealMANOriDataset(
+				data_dir = sig_dir,
+				T = 4.112,
+				fs = 16000,
+				dataset = 'train',
+				mic_dist_range = [0.05, 20],
+				dataset_sz = 100,
+                remove_spkoverlap = False,
+			)
+    _, total_duration = dataset.duration()
+    print('RealMANOri: ', total_duration, 'h')
     for i in range(10):
         sig = dataset[i]
         print(sig.shape) 

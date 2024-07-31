@@ -67,11 +67,11 @@ class opt():
         dirs['data'] = work_dir + '/data'
         dirs['gerdata'] = work_dir + '/SAR-SSL/data'
  
-        dirs['sousig_pretrain'] = dirs['data'] + '/SouSig/wsj0/tr'
-        dirs['sousig_preval'] = dirs['data'] + '/SouSig/wsj0/dt'
-        dirs['sousig_train'] = dirs['data'] + '/SouSig/wsj0/tr'
-        dirs['sousig_val'] = dirs['data'] + '/SouSig/wsj0/dt'
-        dirs['sousig_test'] = dirs['data'] + '/SouSig/wsj0/et'
+        dirs['sousig_pretrain'] = dirs['data'] + '/SrcSig/wsj0/tr'
+        dirs['sousig_preval'] = dirs['data'] + '/SrcSig/wsj0/dt'
+        dirs['sousig_train'] = dirs['data'] + '/SrcSig/wsj0/tr'
+        dirs['sousig_val'] = dirs['data'] + '/SrcSig/wsj0/dt'
+        dirs['sousig_test'] = dirs['data'] + '/SrcSig/wsj0/et'
         
         dirs['noisig_pretrain'] = dirs['data'] + '/NoiSig/5th-DNS-Challenge/noise_fullband'
         dirs['noisig_preval'] = dirs['data'] + '/NoiSig/5th-DNS-Challenge/noise_fullband'
@@ -88,11 +88,11 @@ class opt():
         dirs['IRArni'] = dirs['data'] + '/RIR/IR_Arni/IR'
         dirs['dEchorate'] = dirs['data'] + '/RIR/dEchorate'
         dirs['ACE'] = dirs['data'] + '/RIR/ACE'
-        dirs['LOCATA'] = dirs['data'] + '/SenSig/LOCATA'
+        dirs['LOCATA'] = dirs['data'] + '/MicSig/LOCATA'
 
         # generated RIRs/signals
-        dirs_pretrain = dirs['gerdata'] + '/SenSig-pretrain' + self.sig_ver
-        dirs_preval = dirs['gerdata'] + '/SenSig-preval' + self.sig_ver 
+        dirs_pretrain = dirs['gerdata'] + '/MicSig-pretrain' + self.sig_ver
+        dirs_preval = dirs['gerdata'] + '/MicSig-preval' + self.sig_ver 
 
         dirs['sensig_pretrain'] = [      
                             dirs_pretrain + '/DCASE',         
@@ -116,9 +116,9 @@ class opt():
                             dirs_preval + '/simulate',
                         ]
 
-        dirs_train = dirs['gerdata'] + '/SenSig-train' + self.sig_ver
-        dirs_val = dirs['gerdata'] + '/SenSig-val' + self.sig_ver
-        dirs_test = dirs['gerdata'] + '/SenSig-test' + self.sig_ver
+        dirs_train = dirs['gerdata'] + '/MicSig-train' + self.sig_ver
+        dirs_val = dirs['gerdata'] + '/MicSig-val' + self.sig_ver
+        dirs_test = dirs['gerdata'] + '/MicSig-test' + self.sig_ver
 
         dirs['sensig_train'] = [ 
             dirs_train + '/simulate', 

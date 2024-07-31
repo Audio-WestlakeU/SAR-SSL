@@ -123,6 +123,12 @@ A python implementation of “**<a href="https://arxiv.org/abs/2312.00476" targe
     python gen_sig_from_real_rir.py --stage pretrain --dataset Mesh MIR DCASE dEchorate BUTReverb ACE --src_dir ../../../data/SrcSig/wsj0 --rir_dir ../../../data/RIR/real --save_dir ../../data/MicSig/real 
     python gen_sig_from_real_rir.py --stage preval --dataset DCASE BUTReverb --src_dir ../../../data/SrcSig/wsj0 --rir_dir ../../../data/RIR/real --save_dir ../../data/MicSig/real  
     ```
+  - LOCATA microphone signals for downstream training （TDOA estimation）
+    ```
+    python gen_LOCATA.py --stage train --save-to../../data/MicSig/real_ds_locata
+    python gen_LOCATA.py --stage val --save-to../../data/MicSig/real_ds_locata
+    python gen_LOCATA.py --stage test --save-to../../data/MicSig/real_ds_locata
+    ```
   - additional RIRs for downstream training
     ```
     python gen_simu_certain_room.py --mode rir --stage train --room_num 1000 --save_to ../../data/RIR/simu 

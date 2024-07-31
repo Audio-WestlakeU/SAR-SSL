@@ -1,6 +1,5 @@
 import numpy as np
 import scipy.signal
-# import librosa # cause CPU overload, for data generation (scipy.signal.resample, librosa.resample) 
 import soundfile
 from pathlib import Path
 import matplotlib.pyplot as plt
@@ -11,7 +10,7 @@ from data_generation.utils_src import *
 from data_generation.utils_noise import *
 import data_generation.gen_sig_from_real_rir as real_dataset
 import data_generation.utils_simu_rir_sig as simu_dataset 
-import data_generation.gen_LOCATA as locata_dataset
+import data_generation.utils_LOCATA as locata_dataset
 
 class RandomRealDataset(Dataset):
     """ Load ramdom real-world microphone signals or presaved microphone signals generated with real RIRs 
@@ -32,8 +31,7 @@ class RandomRealDataset(Dataset):
         remove_spkoverlap = True,
         dataset_list = ['LOCATA', 'MCWSJ', 'LibriCSS', 'AMI', 'AISHELL4', 'M2MeT', 'RealMAN', # RealSig
 					    'DCASE', 'MIR', 'Mesh', 'ACE', 'dEchorate', 'BUTReverb'], # RealRIR
-        dataset_probs = [1, 1, 1, 1, 1, 1, 1,
-                        1, 1, 1, 1, 1, 1], 
+        dataset_probs = None, 
         sound_speed = 343.0):
         # RealSig
         # train duration (hours): [33, 74, 83, 101, 4124, 835979, 514811], 
@@ -47,12 +45,13 @@ class RandomRealDataset(Dataset):
         self.dataset_list = []
         for dataset_name in dataset_list:
             data_dir = data_dirs[dataset_name]
-            if dataset_name in ['LOCATA', 'MCWSJ', 'LibriCSS', 'AMI', 'AISHELL4', 'M2MeT', 'RealMAN']:
+            if dataset_name in ['LOCATA', 'MCWSJ', 'LibriCSS', 'AMI', 'AISHELL4', 'M2MeT', 'RealMAN', 'RealMANOri']:
                 if (dataset_name == 'AISHELL4') or (dataset_name == 'M2MeT'):
                     remove_spkoverlap = True
                 else:
                     remove_spkoverlap = False
                 dataset_name_str = dataset_name+'Dataset'
+
                 dataset = globals()[dataset_name_str](
                     data_dir = data_dir,
                     T = T,
@@ -64,12 +63,14 @@ class RandomRealDataset(Dataset):
                     dataset_sz = None, 
                     remove_spkoverlap = remove_spkoverlap,
                     sound_speed = sound_speed)
+               
                 self.dataset_list += [dataset]
             elif dataset_name in ['DCASE', 'MIR', 'Mesh', 'ACE', 'dEchorate', 'BUTReverb']:
                 ds_sz = {'train': 102400, 'val':2560, 'test':2560}
                 dataset_rir = FixMicSigDataset(
                     data_dir = data_dir,
                     load_anno = False,
+                    fs = fs,
                     dataset_sz = ds_sz[stage],
                     transforms = None,
                 )
@@ -93,7 +94,7 @@ class RandomRealDataset(Dataset):
 
         dataset_idx = np.searchsorted(self.ds_probs_cumsum, np.random.uniform())
         ins_idx = np.random.randint(0, len(self.dataset_list[dataset_idx]))
-        np.random.seed(seed=self.seed+ins_idx)
+        # np.random.seed(seed=self.seed+ins_idx)
         mic_sig = self.dataset_list[dataset_idx].__getitem__(ins_idx)
  
         if self.transforms is not None:
@@ -109,7 +110,77 @@ class FixMicSigDataset(Dataset):
         2. for microphone signals generated with real RIR
         3. for fine-tuning with only simulated data
 	"""
-    def __init__(self, data_dir, load_anno, dataset_sz, transforms=None):
+    def __init__(self, data_dir, fs, load_anno, dataset_sz, load_dp=False, transforms=None):
+
+        self.data_paths = []
+        
+        if isinstance(data_dir, list):
+            files = []
+            dp_files = []
+            for d in data_dir:
+                files += list(Path(d).rglob('*.wav'))
+                dp_files += list(Path(d).rglob('*_dp.wav'))
+            np.random.shuffle(files)
+        else:
+            files = list(Path(data_dir).rglob('*.wav'))
+            dp_files = list(Path(data_dir).rglob('*_dp.wav'))
+
+        self.files = [item for item in files if item not in dp_files]
+
+        if dataset_sz is not None:
+            self.dataset_sz = np.min([len(self.files), dataset_sz])
+        else:
+            self.dataset_sz = len(self.files)
+        self.fs = fs
+        self.load_anno = load_anno
+        self.load_dp = load_dp
+        self.transforms = transforms
+
+    def __len__(self):
+        return self.dataset_sz
+
+    def __getitem__(self, idx):
+
+        file_name = str(self.files[idx])
+        mic_sig, fs = soundfile.read(file_name)
+
+        if self.fs != fs:
+            mic_sig = scipy.signal.resample_poly(mic_sig, self.fs, fs)
+        if self.transforms is not None:
+            for t in self.transforms:
+                mic_sig = t(mic_sig)
+
+        return_data = [mic_sig.astype(np.float32)]
+        if self.load_anno:
+            info_file_name = file_name.replace('.wav', '_info.npz')
+            info = dict(np.load(info_file_name))
+            vol = info['room_sz'][0] * info['room_sz'][1] * info['room_sz'][2]
+            sur = info['room_sz'][0] * info['room_sz'][1] + info['room_sz'][0] * info['room_sz'][2] + info['room_sz'][1] * info['room_sz'][2]
+            annos = {
+                'TDOA': info['TDOA'].astype(np.float32), 
+                'T60': info['T60_edc'].astype(np.float32),  
+                'DRR': info['DRR'].astype(np.float32),
+                'C50': info['C50'].astype(np.float32),
+                'ABS': np.array(0.161*vol/sur/info['T60_edc']).astype(np.float32),
+                }
+            return_data += [annos]
+
+        if self.load_dp:
+            dp_file_name = file_name.replace('.wav', '_dp.wav')
+            dp_sig, _ = soundfile.read(dp_file_name)
+            if self.fs != fs:
+                dp_sig = scipy.signal.resample_poly(dp_sig, self.fs, fs)
+            if self.transforms is not None:
+                for t in self.transforms:
+                    dp_sig = t(dp_sig)
+            return_data += [dp_sig]
+
+        return return_data
+ 
+class FixMicSigDatasetLOCATA(Dataset):
+    """ Load fixed presaved microphone signals from LOCATA dataset
+	"""
+    def __init__(self, data_dir, fs, load_anno, dataset_sz, transforms=None):
 
         self.data_paths = []
         
@@ -120,10 +191,12 @@ class FixMicSigDataset(Dataset):
             np.random.shuffle(self.files)
         else:
             self.files = list(Path(data_dir).rglob('*.wav'))
+
         if dataset_sz is not None:
             self.dataset_sz = np.min([len(self.files), dataset_sz])
         else:
             self.dataset_sz = len(self.files)
+        self.fs = fs
         self.load_anno = load_anno
         self.transforms = transforms
 
@@ -134,28 +207,28 @@ class FixMicSigDataset(Dataset):
 
         file_name = str(self.files[idx])
         mic_sig, fs = soundfile.read(file_name)
-        
+
+        if self.fs != fs:
+            mic_sig = scipy.signal.resample_poly(mic_sig, self.fs, fs)
         if self.transforms is not None:
             for t in self.transforms:
                 mic_sig = t(mic_sig)
 
+        return_data = [mic_sig.astype(np.float32)]
         if self.load_anno:
             info_file_name = file_name.replace('.wav', '_info.npz')
-            info = np.load(info_file_name)
-            vol = info['room_sz'][0] * info['room_sz'][1] * info['room_sz'][2]
-            sur = info['room_sz'][0] * info['room_sz'][1] + info['room_sz'][0] * info['room_sz'][2] + info['room_sz'][1] * info['room_sz'][2]
+            info = dict(np.load(info_file_name))
             annos = {
                 'TDOA': info['TDOA'].astype(np.float32), 
-                'T60': info['T60_edc'].astype(np.float32),  
-                'DRR': info['DRR'].astype(np.float32),
-                'C50': info['C50'].astype(np.float32),
-                'ABS': (0.161*vol/sur/info['T60_edc']).astype(np.float32),
+                'T60': np.array(np.NAN), 
+                'DRR': np.array(np.NAN),
+                'C50': np.array(np.NAN),
+                'ABS': np.array(np.NAN),
                 }
-            return mic_sig.astype(np.float32), annos
+            return_data += [annos]
 
-        else:
-            return mic_sig.astype(np.float32)
- 
+        return return_data
+
 class RandomMicSigDataset(Dataset):
     """ Load random presaved microphone signals (*wav)
         1. for fine-tuning with both LOCATA and presaved simulated data 
@@ -164,29 +237,17 @@ class RandomMicSigDataset(Dataset):
         real_sig_dir, 
         sim_sig_dir, 
         real_sim_ratio, 
-        T,
-        fs ,
+        fs,
         stage,
-        mic_dist_range,
-        nmic_selected,
-        prob_mode,
         load_anno, 
         dataset_sz, 
-        sound_speed, 
         transforms=None):
 
-        realdataset = locata_dataset.LOCATADataset(
-            data_dir = real_sig_dir,
-            T = T,
-            fs = fs,
-            stage = stage,
-            mic_dist_range = mic_dist_range,
-            nmic_selected = nmic_selected,
-            prob_mode = prob_mode,
+        realdataset = FixMicSigDatasetLOCATA(
+            data_dir = os.path.join(real_sig_dir, stage),
             load_anno = load_anno,
             dataset_sz = None,
-            sound_speed = sound_speed,
-            src_single_static = True,
+            fs = fs,
             transforms = transforms
             )
 
@@ -194,6 +255,7 @@ class RandomMicSigDataset(Dataset):
             data_dir = sim_sig_dir,
             load_anno = load_anno,
             dataset_sz = None,
+            fs = fs,
             transforms = transforms
             )
         
@@ -215,9 +277,12 @@ class RandomMicSigDataset(Dataset):
         dataset_idx = np.random.randint(0, len(self.dataset_list))
         dataset = self.dataset_list[dataset_idx]
         idx = np.random.randint(0, len(dataset))
-        mic_sig, annos = dataset.__getitem__(idx)
-
-        return mic_sig.astype(np.float32), annos 
+        if self.load_anno:
+            mic_sig, annos = dataset.__getitem__(idx)
+            return mic_sig.astype(np.float32), annos 
+        else:
+            mic_sig = dataset.__getitem__(idx)
+            return mic_sig.astype(np.float32)
 
 class RandomMicSigFromRIRDataset(Dataset):
     """ Generate microphone signals from real RIRs
@@ -318,180 +383,6 @@ class RandomMicSigFromRIRDataset(Dataset):
  
 
 ## Transform classes
-# class Segmenting(object):
-#     """ Segmenting transform
-# 	"""
-#     def __init__(self, K, step, window=None):
-#         self.K = K
-#         self.step = step
-#         if window is None:
-#             self.w = np.ones(K)
-#         elif callable(window):
-#             try: self.w = window(K)
-#             except: raise Exception('window must be a NumPy window function or a Numpy vector with length K')
-#         elif len(window) == K:
-#             self.w = window
-#         else:
-#             raise Exception('window must be a NumPy window function or a Numpy vector with length K')
-
-#     def __call__(self, x, acoustic_scene):
-
-        # L = x.shape[0]
-        # N_w = np.floor(L/self.step - self.K/self.step + 1).astype(int)
-
-        # if self.K > L:
-        #     raise Exception('The window size can not be larger than the signal length ({})'.format(L))
-        # elif self.step > L:
-        #     raise Exception('The window step can not be larger than the signal length ({})'.format(L))
-
-        # # Pad and window the signal
-        # # x = np.append(x, np.zeros((N_w * self.step + self.K - L, N_mics)), axis=0)
-        # # shape_Xw = (N_w, self.K, N_mics)
-        # # strides_Xw = [self.step * N_mics, N_mics, 1]
-        # # strides_Xw = [strides_Xw[i] * x.itemsize for i in range(3)]
-        # # Xw = np.lib.stride_tricks.as_strided(x, shape=shape_Xw, strides=strides_Xw)
-        # # Xw = Xw.transpose((0, 2, 1)) * self.w
-
-        # if acoustic_scene is not None:
-        #     # Pad and window the DOA if it exists
-        #     if hasattr(acoustic_scene, 'DOA'): # (nsample,naziele,nsource)
-        #         N_dims = acoustic_scene.DOA.shape[1]
-        #         num_source = acoustic_scene.DOA.shape[-1]
-        #         DOA = []
-        #         for source_idx in range(num_source):
-        #             DOA += [np.append(acoustic_scene.DOA[:,:,source_idx], np.tile(acoustic_scene.DOA[-1,:,source_idx].reshape((1,-1)),
-        #             [N_w*self.step+self.K-L, 1]), axis=0)] # Replicate the last known DOA
-        #         DOA = np.array(DOA).transpose(1,2,0)
-
-        #         shape_DOAw = (N_w, self.K, N_dims) # (nwindow, win_len, naziele)
-        #         strides_DOAw = [self.step*N_dims, N_dims, 1]
-        #         strides_DOAw = [strides_DOAw[i] * DOA.itemsize for i in range(3)]
-        #         DOAw_sources = []
-        #         for source_idx in range(num_source):
-        #             DOAw = np.lib.stride_tricks.as_strided(DOA[:,:,source_idx], shape=shape_DOAw, strides=strides_DOAw)
-        #             DOAw = np.ascontiguousarray(DOAw)
-        #             for i in np.flatnonzero(np.abs(np.diff(DOAw[..., 1], axis=1)).max(axis=1) > np.pi):
-        #                 DOAw[i, DOAw[i,:,1]<0, 1] += 2*np.pi  # Avoid jumping from -pi to pi in a window
-        #             DOAw = np.mean(DOAw, axis=1)
-        #             DOAw[DOAw[:,1]>np.pi, 1] -= 2*np.pi
-        #             DOAw_sources += [DOAw]
-        #         acoustic_scene.DOAw = np.array(DOAw_sources).transpose(1, 2, 0) # (nsegment,naziele,nsource)
-
-        #     # Pad and window the VAD if it exists
-        #     if hasattr(acoustic_scene, 'mic_vad'): # (nsample,1)
-        #         vad = acoustic_scene.mic_vad[:, np.newaxis]
-        #         vad = np.append(vad, np.zeros((L - vad.shape[0], 1)), axis=0)
-
-        #         shape_vadw = (N_w, self.K, 1)
-        #         strides_vadw = [self.step * 1, 1, 1]
-        #         strides_vadw = [strides_vadw[i] * vad.itemsize for i in range(3)]
-
-        #         acoustic_scene.mic_vad = np.lib.stride_tricks.as_strided(vad, shape=shape_vadw, strides=strides_vadw)[..., 0] # (nsegment, nsample)
-
-        #     # Pad and window the VAD if it exists
-        #     if hasattr(acoustic_scene, 'mic_vad_sources'): # (nsample,nsource)
-        #         shape_vadw = (N_w, self.K, 1)
-        #         strides_vadw = [self.step * 1, 1, 1]
-        #         strides_vadw = [strides_vadw[i] * vad.itemsize for i in range(3)]
-        #         num_source = acoustic_scene.mic_vad_sources.shape[1]
-        #         vad_sources = []
-        #         for source_idx in range(num_source):
-        #             vad = acoustic_scene.mic_vad_sources[:, source_idx:source_idx+1]
-        #             vad = np.append(vad, np.zeros((L - vad.shape[0], 1)), axis=0)
-
-        #             vad_sources += [np.lib.stride_tricks.as_strided(vad, shape=shape_vadw, strides=strides_vadw)[..., 0]]
-
-        #         acoustic_scene.mic_vad_sources = np.array(vad_sources).transpose(1,2,0) # (nsegment, nsample, nsource)
-
-        #     # Pad and window the TDOA if it exists
-        #     if hasattr(acoustic_scene, 'TDOA'): # (nsample,nch-1,nsource)
-        #         num_source = acoustic_scene.TDOA.shape[-1]
-        #         TDOA = []
-        #         for source_idx in range(num_source):
-        #             TDOA += [np.append(acoustic_scene.TDOA[:,:,source_idx], np.tile(acoustic_scene.TDOA[-1,:,source_idx].reshape((1,-1)),
-        #             [N_w*self.step+self.K-L, 1]), axis=0)] # Replicate the last known TDOA
-        #         TDOA = np.array(TDOA).transpose(1,2,0)
-
-        #         nch = TDOA.shape[1]
-        #         shape_TDOAw = (N_w, self.K, nch)
-        #         strides_TDOAw = [self.step * nch, nch, 1]
-        #         strides_TDOAw = [strides_TDOAw[i] * TDOA.itemsize for i in range(3)]
-
-        #         TDOAw_sources = []
-        #         for source_idx in range(num_source):
-        #             TDOAw = np.lib.stride_tricks.as_strided(TDOA[:,:,source_idx], shape=shape_TDOAw, strides=strides_TDOAw)
-        #             TDOAw = np.mean(TDOAw, axis=1)
-        #             TDOAw_sources += [TDOAw]
-        #         acoustic_scene.TDOAw = np.array(TDOAw_sources).transpose(1,2,0) # (nsegment,nch-1,nsource)
-
-        #     # Pad and window the DRR if it exists
-        #     if hasattr(acoustic_scene, 'DRR'): # (nsample,nsource)
-        #         num_source = acoustic_scene.DRR.shape[-1]
-        #         DRR = []
-        #         for source_idx in range(num_source):
-        #             DRR += [np.append(acoustic_scene.DRR[:,source_idx], np.tile(acoustic_scene.DRR[-1:,source_idx],
-        #             [N_w*self.step+self.K-L]), axis=0)] # Replicate the last known DRR
-        #         DRR = np.array(DRR).transpose(1,0)
-
-        #         nch = DRR.shape[1]
-        #         shape_DRRw = (N_w, self.K, 1)
-        #         strides_DRRw = [self.step * 1, 1, 1]
-        #         strides_DRRw = [strides_DRRw[i] * DRR.itemsize for i in range(3)]
-
-        #         DRRw_sources = []
-        #         for source_idx in range(num_source):
-        #             DRRw = np.lib.stride_tricks.as_strided(DRR[:,source_idx], shape=shape_DRRw, strides=strides_DRRw)
-        #             DRRw = np.mean(DRRw, axis=1)
-        #             DRRw_sources += [DRRw[..., 0]]
-        #         acoustic_scene.DRRw = np.array(DRRw_sources).transpose(1,0) # (nsegment,nsource)
-
-        #     # Pad and window the C50 if it exists
-        #     if hasattr(acoustic_scene, 'C50'): # (nsample,nsource)
-        #         num_source = acoustic_scene.C50.shape[-1]
-        #         C50 = []
-        #         for source_idx in range(num_source):
-        #             C50 += [np.append(acoustic_scene.C50[:,source_idx], np.tile(acoustic_scene.C50[-1:,source_idx],
-        #             [N_w*self.step+self.K-L]), axis=0)] # Replicate the last known C50
-        #         C50 = np.array(C50).transpose(1,0)
-
-        #         nch = C50.shape[1]
-        #         shape_C50w = (N_w, self.K, 1)
-        #         strides_C50w = [self.step * 1, 1, 1]
-        #         strides_C50w = [strides_C50w[i] * C50.itemsize for i in range(3)]
-
-        #         C50w_sources = []
-        #         for source_idx in range(num_source):
-        #             C50w = np.lib.stride_tricks.as_strided(C50[:,source_idx], shape=shape_C50w, strides=strides_C50w)
-        #             C50w = np.mean(C50w, axis=1)
-        #             C50w_sources += [C50w[..., 0]]
-        #         acoustic_scene.C50w = np.array(C50w_sources).transpose(1,0) # (nsegment,nsource)
-
-        #     # Pad and window the C80 if it exists
-        #     if hasattr(acoustic_scene, 'C80'): # (nsample,nsource)
-        #         num_source = acoustic_scene.C80.shape[-1]
-        #         C80 = []
-        #         for source_idx in range(num_source):
-        #             C80 += [np.append(acoustic_scene.C80[:,source_idx], np.tile(acoustic_scene.C80[-1:,source_idx],
-        #             [N_w*self.step+self.K-L]), axis=0)] # Replicate the last known C80
-        #         C80 = np.array(C80).transpose(1,0)
-
-        #         nch = C80.shape[1]
-        #         shape_C80w = (N_w, self.K, 1)
-        #         strides_C80w = [self.step * 1, 1, 1]
-        #         strides_C80w = [strides_C80w[i] * C80.itemsize for i in range(3)]
-
-        #         C80w_sources = []
-        #         for source_idx in range(num_source):
-        #             C80w = np.lib.stride_tricks.as_strided(C80[:,source_idx], shape=shape_C80w, strides=strides_C80w)
-        #             C80w = np.mean(C80w, axis=1)
-        #             C80w_sources += [C80w[..., 0]]
-        #         acoustic_scene.C80w = np.array(C80w_sources).transpose(1,0) # (nsegment,nsource)
-
-        #     # Timestamp for each window
-        #     acoustic_scene.tw = np.arange(0, (L-self.K), self.step) / acoustic_scene.fs
-
-        # return x, acoustic_scene
-
 class Selecting(object):
     def __init__(self, select_range):
         self.select_range = select_range

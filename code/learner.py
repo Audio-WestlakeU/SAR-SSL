@@ -92,7 +92,7 @@ class Learner(ABC):
 		optimizer.zero_grad()
 		pbar = tqdm(enumerate(dataset), total=len(dataset), leave=False) 
 
-		for batch_idx, mic_sig_batch in pbar:
+		for batch_idx, (mic_sig_batch,) in pbar:
 			if epoch is not None: pbar.set_description('Epoch {}'.format(epoch))
 
 			in_batch, = self.data_preprocess(mic_sig_batch, None)
@@ -139,8 +139,8 @@ class Learner(ABC):
 			if return_diff: 
 				diff = 0
 
-			for mic_sig_batch in dataset:
-   
+			for data in dataset:
+				mic_sig_batch = data[0]
 				in_batch, = self.data_preprocess(mic_sig_batch, None)
 
 				with torch.cuda.amp.autocast(enabled=self.use_amp):

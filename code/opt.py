@@ -16,6 +16,7 @@ class opt_pretrain():
         self.acoustic_setting = {
             'sound_speed': 343.0, 
             'fs': 16000, 
+            'T': 4.112,
             'nmic': 2,
             'mic_dist_range':[0.03, 0.20]}
 
@@ -47,9 +48,11 @@ class opt_pretrain():
         parser.add_argument('--lr', type=float, default=0.001, metavar='LR', help='learning rate (default:0.001)')
         
         parser.add_argument('--test', action='store_true', default=False, help='change to test stage of downstream tasks (default: False)')
+        parser.add_argument('--test-mode', type=str, default='all', metavar='TestMode', help='test mode (default: all)')
 
         args = parser.parse_args()
         assert (args.pretrain + args.pretrain_frozen_encoder + args.test)==1, 'Pretraining stage (pretrain or test) is undefined'
+        assert args.test_mode in ['all', 'ins'], 'Test mode is undefined'
 
         self.time = args.time
         self.work_dir = args.work_dir
@@ -68,8 +71,6 @@ class opt_pretrain():
         dirs = {}
 
         dirs['code'] = work_dir + '/SAR-SSL/code'
-        # dirs['data'] = work_dir + '/data'
-        # dirs['gerdata'] = work_dir + '/SAR-SSL/data'
         dirs['data'] = self.work_dir_local + '/data'
         dirs['gerdata'] = self.work_dir_local + '/SAR-SSL/data'
         dirs['exp'] = work_dir + '/SAR-SSL/exp'
@@ -91,7 +92,8 @@ class opt_pretrain():
             'AMI': dirs['data'] + '/MicSig/AMI',
             'AISHELL4': dirs['data'] + '/MicSig/AISHELL-4',
             'M2MeT': dirs['data'] + '/MicSig/M2MeT',
-            'RealMAN': dirs['data'] + '/MicSig/RealMAN', #dirs['data'] + '/MicSig/aligned_static_high_精细对齐_correctDPRIR_filtered3'
+            'RealMAN': dirs['data'] + '/MicSig/RealMAN', 
+            'RealMANOri': dirs['data'] + '/MicSig/aligned_static_high_精细对齐_correctDPRIR_filtered3'
             }
         dirs['micsig_real_preval'] = {
             'DCASE': dirs['gerdata'] + '/MicSig/real/preval/DCASE',
@@ -99,6 +101,7 @@ class opt_pretrain():
             'AISHELL4': dirs['data'] + '/MicSig/AISHELL-4',
             'M2MeT': dirs['data'] + '/MicSig/M2MeT',
             'RealMAN': dirs['data'] + '/MicSig/RealMAN',
+            'RealMANOri': dirs['data'] + '/MicSig/aligned_static_high_精细对齐_correctDPRIR_filtered3'
             }
         dirs['micsig_real_pretest'] = {
             'ACE': dirs['gerdata'] + '/MicSig/real/pretrain/ACE',
@@ -127,7 +130,7 @@ class opt_downstream():
             'fs': 16000, 
             'snr_range': [15, 30],
             'nmic': 2,
-            'mic_dist_range':[0.03, 0.20]}
+            'mic_dist_range': [0.03, 0.20]}
 
         self.extra_info = '' 
         self.ds_token = ''
@@ -142,7 +145,7 @@ class opt_downstream():
 
         # for training and test stages
         parser.add_argument('--gpu-id', type=str, default='6,', metavar='GPU', help='GPU ID (default: 1)')
-        parser.add_argument('--workers', type=int, default=8, metavar='Worker', help='number of workers (default: 8)')
+        parser.add_argument('--workers', type=int, default=4, metavar='Worker', help='number of workers (default: 8)')
         # parser.add_argument('--bs', type=int, nargs='+', default=[128, 128, 128], metavar='TrainValTestBatch', help='batch size for training, validation and test (default: [128, 128, 128])')
         parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training (default: False)')
         parser.add_argument('--use-amp', action='store_true', default=False, help='Use automatic mixed precision training (default: False)')
@@ -157,19 +160,21 @@ class opt_downstream():
         parser.add_argument('--simu-exp', action='store_true', default=False, help='experiments on simulated data (default: False)')
 
         parser.add_argument('--ds-train', action='store_true', default=False, help='change to train stage of downstream tasks (default: False)')
-        parser.add_argument('--ds-trainmode', type=str, default='finetune', metavar='DSTrainMode', help='how to train downstream models (default: finetune)') # ['scratchUP', 'scratchLOW', 'finetune', 'lineareval']
-        parser.add_argument('--ds-task', type=str, nargs='+', default=[''], metavar='DSTask', help='downstream task (default: TDOA, DRR, T60 estimation)')
+        parser.add_argument('--ds-trainmode', type=str, default='finetune', metavar='DSTrainMode', help='how to train downstream models (default: finetune)') # ['scratchLOW', 'finetune', 'lineareval']
+        parser.add_argument('--ds-task', type=str, nargs='+', default=['TDOA'], metavar='DSTask', help='downstream task (default: TDOA estimation)')
         parser.add_argument('--ds-token', type=str, default='all', metavar='DSToken', help='downstream token (default: all)') # ['all', 'cls']
-        parser.add_argument('--ds-head', type=str, default='mlp', metavar='DSHead', help='downstream head (default: mlp)') # ['mlp', 'crnn_in', 'crnn_med', 'crnn_out']
+        parser.add_argument('--ds-head', type=str, default='mlp', metavar='DSHead', help='downstream head (default: mlp)')  
         parser.add_argument('--ds-embed', type=str, default='spat', metavar='DSEmbed', help='downstream embed (default: spat)') # ['spec_spat', 'spec', 'spat']
         parser.add_argument('--ds-nsimroom', type=int, default=0, metavar='DSSimRoom', help='number of simulated room used for downstream training (default: 0)') 
         parser.add_argument('--ds-real-sim-ratio', type=int, nargs='+', default=[1, 1], metavar='DSRealSimRatio', help='downstream number ratio between real data and simulated data (default: [1, 1])')
 
         parser.add_argument('--ds-test', action='store_true', default=False, help='change to test stage of downstream tasks (default: False)')
+        parser.add_argument('--test-mode', type=str, default='cal_metric_wo_info', metavar='TestMode', help='test mode (default: cal_metric_wo_info)')
 
         args = parser.parse_args()
         assert (args.ds_train + args.ds_test)==1, 'Downstream stage (train or test) is not defined'
-        assert args.ds_trainmode in ['sratchUP', 'scratchLOW', 'finetune', 'lineareval'], 'Downstream train mode in not defined'
+        assert args.ds_trainmode in ['scratchLOW', 'finetune', 'lineareval'], 'Downstream train mode in not defined' # 'sratchUP'   
+        assert args.test_mode in ['cal_metric', 'cal_metric_wo_info', 'vis_embed'], 'Test mode is undefined'
         self.simu_exp = args.simu_exp
         self.time = args.time
         self.work_dir = args.work_dir
@@ -193,79 +198,63 @@ class opt_downstream():
         args.ds_specifics = self.ds_specifics
         args.acoustic_setting = self.acoustic_setting
         
-        # add argument
-        if (args.ds_trainmode == 'scratchUP'):
-            bs_set = [32] 
+        if self.simu_exp: ## Simulate data
+            bs_set = [8] # simulated
+            lr_set = [0.001, 0.0005, 0.0001, 0.00005] # simulated
             nepoch = 200
-            num = 512000
-            ntrial = 1 
+            num = args.ds_nsimroom * 100
+            ntrial = np.maximum(1, round(32/(args.ds_nsimroom+10e-4)))
+            self.ntrail = ntrial
             args.ds_setting = {}
-            args.ds_setting['TDOA'] = {'nepoch': nepoch, 'num': num, 'lr_set': [0.0001], 'bs_set': bs_set, 'ntrial': ntrial}
-            args.ds_setting['DRR'] = {'nepoch': nepoch, 'num': num, 'lr_set': [0.001], 'bs_set': bs_set, 'ntrial': ntrial}
-            args.ds_setting['C50'] = {'nepoch': nepoch, 'num': num, 'lr_set': [0.001], 'bs_set': bs_set, 'ntrial': ntrial}
-            args.ds_setting['T60'] = {'nepoch': nepoch, 'num': num, 'lr_set': [0.001], 'bs_set': bs_set, 'ntrial': ntrial}
-            args.ds_setting['ABS'] = {'nepoch': nepoch, 'num': num, 'lr_set': [0.001], 'bs_set': bs_set, 'ntrial': ntrial}
+            args.ds_setting['TDOA'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
+            args.ds_setting['DRR'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
+            args.ds_setting['C50'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
+            args.ds_setting['T60'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
+            args.ds_setting['ABS'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
+            self.extra_info = 'R'+str(args.ds_nsimroom)
 
-        else:
-            ### use pretrained model for downstream tasks
-            ## Simulate data
-            if self.simu_exp:
-                bs_set = [8] # simulated
-                lr_set = [0.001, 0.0005, 0.0001, 0.00005] # simulated
-                nepoch = 200
-                num = args.ds_nsimroom * 100
-                ntrial = np.maximum(1, round(32/(args.ds_nsimroom+10e-4)))
-                self.ntrail = ntrial
-                args.ds_setting = {}
-                args.ds_setting['TDOA'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
-                args.ds_setting['DRR'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
-                args.ds_setting['C50'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
-                args.ds_setting['T60'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
-                args.ds_setting['ABS'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
-                self.extra_info = 'R'+str(args.ds_nsimroom)
-
+        else: ## Real-world data
+            bs_set = [16] # real-world
+            lr_set = [0.001, 0.0001] # real-world 
+            nepoch = 200
+            num_TDOA = 80000
+            if (args.ds_trainmode == 'finetune'):
+                if self.ds_specifics['real_sim_ratio'] == [1,0]:
+                    num = 1600
+                elif self.ds_specifics['real_sim_ratio'] == [1,1]:
+                    num = 3200
+                elif self.ds_specifics['real_sim_ratio'] == [0,1]:
+                    num = 32000
+            elif (args.ds_trainmode == 'scratchLOW'):
+                if self.ds_specifics['real_sim_ratio'] == [1,0]:
+                    num = 1600
+                elif self.ds_specifics['real_sim_ratio'] == [1,1]:
+                    num = 16000
+                elif self.ds_specifics['real_sim_ratio'] == [0,1]:
+                    num = 32000
             else:
-                ## Real-world data
-                bs_set = [16] # real-world
-                lr_set = [0.001, 0.0001] # real-world 
-                nepoch = 200
-                num_TDOA = 80000
-                if (args.ds_trainmode == 'finetune'):
-                    if self.ds_specifics['real_sim_ratio'] == [1,0]:
-                        num = 1600
-                    elif self.ds_specifics['real_sim_ratio'] == [1,1]:
-                        num = 3200
-                    elif self.ds_specifics['real_sim_ratio'] == [0,1]:
-                        num = 32000
-                elif (args.ds_trainmode == 'scratchLOW'):
-                    if self.ds_specifics['real_sim_ratio'] == [1,0]:
-                        num = 1600
-                    elif self.ds_specifics['real_sim_ratio'] == [1,1]:
-                        num = 16000
-                    elif self.ds_specifics['real_sim_ratio'] == [0,1]:
-                        num = 32000
-                else:
-                    raise Exception('Undefined trainmode for the number of real-world training data')
-                ntrial = 1
-                    
-                # set to infinite training epochs for plotting training curves inff
-                # lr_set = [0.0001] # for TDOA estimation on real-world data 
-                # nepoch = 60 # TDOA 
-                # num_TDOA = 80000
-                # # lr_set = [0.001, 0.0001]
-                # # num = 3200
-                # # # nepoch = 50 # T60
-                # # # nepoch = 300 # DRR
-                # # # # nepoch = 150 # C50
-                # # # nepoch = 50 # ABS
-                # # # nepoch = 200 # TDOA
+                raise Exception('Undefined trainmode for the number of real-world training data')
+            ntrial = 1
                 
-                args.ds_setting = {}
-                args.ds_setting['TDOA'] = {'nepoch': nepoch, 'num': num_TDOA, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
-                args.ds_setting['DRR'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
-                args.ds_setting['C50'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
-                args.ds_setting['T60'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
-                args.ds_setting['ABS'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
+            ## Inff plot: set to infinite training epochs for plotting training curves 
+            # lr_set = [0.0001] # for TDOA estimation on real-world data 
+            # nepoch = 60 # TDOA 
+            # num_TDOA = 80000
+            # # lr_set = [0.001, 0.0001]
+            # # num = 3200
+            # # # nepoch = 50 # T60
+            # # # nepoch = 300 # DRR
+            # # # # nepoch = 150 # C50
+            # # # nepoch = 50 # ABS
+            # # # nepoch = 200 # TDOA
+            
+            args.ds_setting = {}
+            args.ds_setting['TDOA'] = {'nepoch': nepoch, 'num': num_TDOA, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
+            args.ds_setting['DRR'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
+            args.ds_setting['C50'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
+            args.ds_setting['T60'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
+            args.ds_setting['ABS'] = {'nepoch': nepoch, 'num': num, 'lr_set': lr_set, 'bs_set': bs_set, 'ntrial': ntrial}
+
         return args
 
     def dir(self):
@@ -313,6 +302,7 @@ class opt_downstream():
 
             # LOCATA-TDOA estimation
             dirs['micsig_real'] = dirs['data'] + '/MicSig/LOCATA'
+            dirs['micsig_real'] = dirs['gerdata'] + '/MicSig/real_ds_locata'
             dirs['micsig_train_simu'] = dirs['gerdata'] + '/MicSig/simu_ds/train'
 
             data_model_flag = 'real_' + 'train' + str(self.ds_specifics['real_sim_ratio'][0]) + 'real'+ str(self.ds_specifics['real_sim_ratio'][1]) + 'sim_valreal'
@@ -322,7 +312,6 @@ class opt_downstream():
         
         dirs['log_task'] = dirs['exp'] + '/' + 'TASK' + '/' + self.time
 
-        dirs['log_task_scratchUP'] = dirs['log_task'] + '/scratchup-' + self.ds_token + '-' + self.ds_head + '-' + 'NUM' + '-' + 'LR-BAS-TRI' + '-' + self.ds_embed + '-' + data_model_flag + self.extra_info
         dirs['log_task_scratchLOW'] = dirs['log_task'] + '/scratchlow-' + self.ds_token + '-' + self.ds_head + '-' + 'NUM' + '-' + 'LR-BAS-TRI' + '-' + self.ds_embed + '-' + data_model_flag + self.extra_info
 
         dirs['log_task_finetune'] = dirs['log_task'] + '/finetune-' + self.ds_token + '-' + self.ds_head + '-' + 'NUM' + '-' + 'LR-BAS-TRI' + '-' + self.ds_embed + '-' + data_model_flag  + self.extra_info

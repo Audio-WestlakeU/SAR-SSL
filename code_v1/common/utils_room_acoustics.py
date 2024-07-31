@@ -123,7 +123,7 @@ def select_microphone_pairs(mic_poss, nmic_selected, mic_dist_range):
     for mic_pair_idxes in mic_pair_idxes_set:
         mic_pos = mic_poss[mic_pair_idxes, :]
         dist = np.sqrt(np.sum((mic_pos[0, :]-mic_pos[1, :])**2))
-        if ( (dist >= mic_dist_range[0]) | (dist <= mic_dist_range[1]) ):
+        if ( (dist >= mic_dist_range[0]) & (dist <= mic_dist_range[1]) ):
             mic_pair_idxes_selected += [mic_pair_idxes]
             mic_pos_selected += [mic_pos]
     assert (not mic_pair_idxes_selected)==False, f'No microphone pairs satisfy the microphone distance range {mic_dist_range}'
