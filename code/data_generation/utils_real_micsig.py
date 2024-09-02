@@ -198,7 +198,7 @@ class RealMANDataset(RealMicSigDataset):
     def get_items_probs(self, data_dir, tasks, arrays, mic_idxes_selected, duration_min_limit, stage, prob_mode):
         dataset_split = {'train':[
                                     'LivingRoom1',  #'scene_0427_教师公寓_客厅'
-                                    'LivingRoom3'   #'scene_0703_Hotel'
+                                    'LivingRoom3',   #'scene_0703_Hotel'
                                     'LivingRoom4',  #'scene_0704_Loft'
                                     'LivingRoom5',  #'scene_0706_民宿'
                                     'LivingRoom6',  #'scene_0707_民宿2'

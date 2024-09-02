@@ -241,10 +241,10 @@ class MicSigFromRIRDataset(Dataset):
         max_value_dp = np.max(mic_sig_dp)
         min_value_dp = np.min(mic_sig_dp)
         value = np.max([np.abs(max_value), np.abs(min_value), np.abs(max_value_dp), np.abs(min_value_dp)])
-        mic_sig = mic_sig / value
-        mic_sig_dp = mic_sig_dp / value
-        mic_sig_srcs_clean = mic_sig_srcs_clean / value
-        mic_sig_srcs_dp = mic_sig_srcs_dp / value
+        mic_sig = mic_sig / value *0.9
+        mic_sig_dp = mic_sig_dp / value *0.9
+        mic_sig_srcs_clean = mic_sig_srcs_clean / value *0.9
+        mic_sig_srcs_dp = mic_sig_srcs_dp / value *0.9
 
         # Save data
         if self.save_to:

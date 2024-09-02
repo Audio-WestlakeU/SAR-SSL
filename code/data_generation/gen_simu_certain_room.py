@@ -55,10 +55,12 @@ def GenerateRandomRIROfCertainRoom(
     ): 
 
     if traj_pt_mode == 'time':
-        if source_state =='static':
+        if 'static' in source_state:
             nb_points = 1
+        elif 'moving' in source_state:
+            nb_points = int(T/0.1) # number of RIRs per trajectory
         else:
-            nb_points = int(T/0.1)
+            raise Exception('Unknown source state: {}'.format(source_state))
     else:
         nb_points = None
     if stage == 'pretrain':
@@ -220,10 +222,12 @@ def GenerateRandomMicSigOfCertainRoom(
     ): 
  
     if traj_pt_mode == 'time':
-        if source_state =='static':
+        if 'static' in source_state:
             nb_points = 1
+        elif 'moving' in source_state:
+            nb_points = int(T/0.1) # number of RIRs per trajectory
         else:
-            nb_points = int(T/0.1)
+            raise Exception('Unknown source state: {}'.format(source_state))
     else:
         nb_points = None
     # if stage == 'pretrain':

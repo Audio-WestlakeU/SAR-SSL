@@ -111,7 +111,7 @@ class LOCATADataset(Dataset):
                     TDOA = trans(TDOA)
 
         max_value = np.max(np.abs(mic_sig))
-        mic_sig = mic_sig/max_value
+        mic_sig = mic_sig/(max_value+1e-8)*0.9
 
         if self.src_single_static:
             if self.load_anno:
