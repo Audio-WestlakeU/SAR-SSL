@@ -909,17 +909,6 @@ class MicrophoneSignalOrRIR():
 
         if TDOA: 
             nmic = mic_pos.shape[-2]
-            # if (traj_pts==0).all(): # for ACE, static source, discrete values
-            #     TDOA = np.zeros((nsample, nmic-1, num_source))  # (nsample,nch-1,nsrc)
-            #     nsample_find_dp = 200
-            #     for source_idx in range(num_source):
-            #         for ch_idx in range(1, nmic):
-            #             m_dp_sample, m_dp_value, _ = find_dp_from_rir(rir_srcs[0, ch_idx, 0:nsample_find_dp, source_idx])
-            #             ref_dp_sample, ref_dp_value, _ = find_dp_from_rir(rir_srcs[0, 0, 0:nsample_find_dp, source_idx])
-            #             assert m_dp_sample <=100, m_dp_sample # for ACE, the silece at begining is removed
-            #             TDOA[:, ch_idx-1, source_idx] = (m_dp_sample - ref_dp_sample) / fs
-                        
-            # else: # for simulated data, continuous values
             if len(mic_pos.shape) == 2:
                 mic_pos = np.tile(mic_pos[np.newaxis, :, :], (npt, 1, 1))
             elif len(mic_pos.shape) == 3:
@@ -1066,25 +1055,27 @@ class MicrophoneSignalOrRIR():
         return annos
     
     def _cart2sph(self, cart):
-        """ cart [x,y,z] → sph [azi,ele,r] (degrees in radian)
+        """ cartesian coordinates[x,y,z] → spherical coordinates [azi,ele,r] (degrees in radian)
         """
-        xy2 = cart[:,0]**2 + cart[:,1]**2
+        xy2 = cart[...,0]**2 + cart[...,1]**2
         sph = np.zeros_like(cart)
-        sph[:,0] = np.arctan2(cart[:,1], cart[:,0])
-        sph[:,1] = np.arctan2(np.sqrt(xy2), cart[:,2]) # Elevation angle defined from Z-axis down
-        sph[:,2] = np.sqrt(xy2 + cart[:,2]**2)
+        sph[...,0] = np.arctan2(cart[...,1], cart[...,0])
+        sph[...,1] = np.arctan2(np.sqrt(xy2), cart[...,2]) # Elevation angle defined from Z-axis down
+        sph[...,2] = np.sqrt(xy2 + cart[...,2]**2)
 
         return sph
 
     def _sph2cart(self, sph):
-        """ sph [azi,ele,r] → cart [x,y,z] (degrees in radian)
+        """ spherical coordinates [azi,ele,r] → cartesian coordinates [x,y,z] (degrees in radian)
         """
-        if sph.shape[-1] == 2: sph = np.concatenate((sph, np.ones_like(sph[..., 0]).unsqueeze(-1)), dim=-1)
+        if sph.shape[-1] == 2: 
+            sph = np.concatenate((sph, np.ones_like(sph[..., 0]).unsqueeze(-1)), axis=-1)
         x = sph[..., 2] * np.sin(sph[..., 1]) * np.cos(sph[..., 0])
         y = sph[..., 2] * np.sin(sph[..., 1]) * np.sin(sph[..., 0])
         z = sph[..., 2] * np.cos(sph[..., 1])
 
-        return np.stack((x, y, z)).transpose(1, 0)
+        return np.concatenate([x[..., np.newaxis], y[..., np.newaxis], z[..., np.newaxis]], axis=-1) 
+
 
 class RIRDataset(Dataset):
     def __init__(

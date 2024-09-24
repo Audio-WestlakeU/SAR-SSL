@@ -217,33 +217,14 @@ if (args.ds_train):
 										sim_sig_dir = dirs['micsig_'+stage.split('_')[0]+'_simu']
 									else:
 										sim_sig_dir = []
-									# datasets[stage] = at_dataset.RandomMicSigDataset(
-									# 	real_sig_dir=real_sig_dir, 
-									# 	sim_sig_dir=sim_sig_dir, 
-									# 	real_sim_ratio=real_sim_ratios[stage.split('_')[0]], 
-									# 	T = T,
-									# 	fs = fs,
-									# 	stage = stage.split('_')[0],
-									# 	mic_dist_range = mic_dist_range,
-									# 	nmic_selected = nmic,
-									# 	prob_mode = [''],
-									# 	load_anno=True, 
-									# 	sound_speed=speed, 
-									# 	dataset_sz=data_num[stage], 
-									# 	transforms=[selecting]
-									# )
+
 									datasets[stage] = at_dataset.RandomMicSigDataset(
 										real_sig_dir=real_sig_dir, 
 										sim_sig_dir=sim_sig_dir, 
 										real_sim_ratio=real_sim_ratios[stage.split('_')[0]], 
-										# T = T,
 										fs = fs,
 										stage = stage.split('_')[0],
-										# mic_dist_range = mic_dist_range,
-										# nmic_selected = nmic,
-										# prob_mode = [''],
 										load_anno=True, 
-										# sound_speed=speed, 
 										dataset_sz=data_num[stage], 
 										transforms=[selecting]
 									)

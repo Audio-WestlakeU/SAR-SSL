@@ -107,7 +107,7 @@ class RandomRealDataset(Dataset):
 class FixMicSigDataset(Dataset):
     """ Load fixed presaved microphone signals (simulated data or microphones signal generated with real RIRs)
         1. for pretraining with simulated data
-        2. for microphone signals generated with real RIR
+        2. for pretraining with microphone signals generated with real RIR
         3. for fine-tuning with only simulated data
 	"""
     def __init__(self, data_dir, fs, load_anno, dataset_sz, load_dp=False, transforms=None):

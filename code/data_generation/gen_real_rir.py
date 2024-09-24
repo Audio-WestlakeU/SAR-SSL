@@ -206,10 +206,10 @@ class DCASERIRDataset():
     def _sph2cart(self, sph):
         """ sph [azi,ele,r] → cart [x,y,z]
         """
-        if sph.shape[-1] == 2: sph = np.concatenate((sph, np.ones_like(sph[..., 0]).unsqueeze(-1)), dim=-1)
-        x = sph[..., 2] * np.sin(sph[..., 1]) * np.cos(sph[..., 0])
-        y = sph[..., 2] * np.sin(sph[..., 1]) * np.sin(sph[..., 0])
-        z = sph[..., 2] * np.cos(sph[..., 1])
+        if sph.shape[-1] == 2: sph = np.concatenate((sph, np.ones_like(sph[:, 0]).unsqueeze(-1)), dim=-1)
+        x = sph[:, 2] * np.sin(sph[:, 1]) * np.cos(sph[:, 0])
+        y = sph[:, 2] * np.sin(sph[:, 1]) * np.sin(sph[:, 0])
+        z = sph[:, 2] * np.cos(sph[:, 1])
 
         return np.stack((x, y, z)).transpose(1, 0)
     

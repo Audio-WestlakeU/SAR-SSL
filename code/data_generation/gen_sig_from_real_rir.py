@@ -115,7 +115,7 @@ class RIRDataset(Dataset):
                 nsample = int(self.load_noise_duration * self.fs)
                 noise_signal = np.zeros((nsample, nmic))
             else:
-                noise_file = np.random.choice(noise_files, 1)[0]
+                noise_file = np.random.choice(noise_files, 1, replace=False)[0]
                 noise_fs = soundfile.info(noise_file).samplerate
                 noise_duration = soundfile.info(noise_file).duration
                 nsample_noise = int(noise_duration * noise_fs)
