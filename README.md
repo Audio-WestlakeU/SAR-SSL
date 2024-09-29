@@ -1,5 +1,5 @@
 # SAR-SSL
-A python implementation of “**<a href="https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10675425" target="_blank">Self-Supervised Learning of Spatial Acoustic Representation with Cross-Channel Signal Reconstruction and Multi-Channel Conformer</a>**”, IEEE/ACM Transactions on Audio, Speech, and Language Processing (TASLP), 2024.
+A python implementation of “**<a href="https://ieeexplore.ieee.org/document/10675425" target="_blank">Self-Supervised Learning of Spatial Acoustic Representation with Cross-Channel Signal Reconstruction and Multi-Channel Conformer</a>**”, IEEE/ACM Transactions on Audio, Speech, and Language Processing (TASLP), 2024.
     <div align=center>
     <img src=https://github.com/BingYang-20/SAR-SSL/assets/74909427/49878fbd-415c-45a7-8ff2-2b99ec4bf496 width=40% />
     </div>
@@ -218,12 +218,14 @@ A python implementation of “**<a href="https://ieeexplore.ieee.org/stamp/stamp
 ## Citation
 If you find our work useful in your research, please consider citing:
 ```
-@InProceedings{yang2023sarssl,
-    author = "Bing Yang and Xiaofei Li",
-    title = "Self-Supervised Learning of Spatial Acoustic Representation with Cross-Channel Signal Reconstruction and Multi-Channel Conformer",
-    booktitle = "arXiv preprint arXiv:2312.00476",
-    year = "2023",
-    pages = ""}
+@InProceedings{yang2024sarssl,
+    Author = "Bing Yang and Xiaofei Li",
+    Title = "Self-Supervised Learning of Spatial Acoustic Representation with Cross-Channel Signal Reconstruction and Multi-Channel Conformer",
+    Journal = "IEEE/ACM Transactions on Audio, Speech, and Language Processing (TASLP)",
+    Volume = "32",	
+    Number = "",
+    Pages = "4211-4225",
+    Year = "2024"}
 ```
 
 ## Licence
