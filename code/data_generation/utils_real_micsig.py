@@ -1120,7 +1120,6 @@ class AISHELL4Dataset(RealMicSigDataset):
                     for i, si in enumerate(sentence_infos):
                         if i == len(sentence_infos) - 1:
                             continue
-                        duration_min_limit = 0
                         # sentence with additional silence or sentence without overlap 
                         if (sentence_infos[i + 1].minTime - etbts[i] >= duration_min_limit) & (sentence_infos[i + 1].minTime<audio_duration):
                             si_selected.append((etbts[i], sentence_infos[i + 1].minTime, sentence_infos[i + 1].minTime - etbts[i]))
