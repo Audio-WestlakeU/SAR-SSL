@@ -39,7 +39,7 @@ class RandomRealDataset(Dataset):
         # room condition: [1 3 1 5 3 10 13]
         # [1, 5, 5, 5, 8, 8, 8]
 
-        print(f'dataset ratio: {dataset_list}')
+        print(f'dataset list: {dataset_list}')
         print(f'dataset ratio: {dataset_probs}')
  
         self.dataset_list = []

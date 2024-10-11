@@ -1115,14 +1115,16 @@ class AISHELL4Dataset(RealMicSigDataset):
                         if si.maxTime > etbt:
                             etbt = si.maxTime
 
-                    # the start time of current sentence - the end time of the previous sentence >= duration_min_limit
+                    # the start time of next sentence - the end time of the previous sentence >= duration_min_limit
                     si_selected = []  # [(start_time, end_time, duration)]
                     for i, si in enumerate(sentence_infos):
                         if i == len(sentence_infos) - 1:
                             continue
+                        duration_min_limit = 0
+                        # sentence with additional silence or sentence without overlap 
                         if (sentence_infos[i + 1].minTime - etbts[i] >= duration_min_limit) & (sentence_infos[i + 1].minTime<audio_duration):
                             si_selected.append((etbts[i], sentence_infos[i + 1].minTime, sentence_infos[i + 1].minTime - etbts[i]))
-
+                            
                     if 'duration' in prob_mode:
                         probs_uttr = [x[-1] for x in si_selected] 
                     else:
@@ -1303,7 +1305,7 @@ class M2MeTDataset(RealMicSigDataset):
                     if si.maxTime > etbt:
                         etbt = si.maxTime
 
-                # the start time of current sentence - the end time of the previous sentence >= duration_min_limit
+                # the start time of next sentence - the end time of the previous sentence >= duration_min_limit
                 si_selected = []  # [(si, start_time, end_time, duration)]
                 for i, si in enumerate(sentence_infos):
                     if i == len(sentence_infos) - 1:
@@ -1562,7 +1564,7 @@ class CHiME3Dataset(RealMicSigDataset):
 #                     if si['end_time'] > etbt:
 #                         etbt = si['end_time']
 
-#                 # the start time of current sentence - the end time of the previous sentence >= duration_min_limit
+#                 # the start time of next sentence - the end time of the previous sentence >= duration_min_limit
 #                 si_selected = []
 #                 for i, si in enumerate(sentence_infos):
 #                     if i == len(sentence_infos) - 1:
@@ -1755,22 +1757,22 @@ if __name__ == '__main__':
     # #     sig = dataset[i]
     # #     print(sig.shape)
 
-    sig_dir = dirs['AMI']
-    dataset = AMIDataset(
-				data_dir = sig_dir,
-				T = 4.112,
-				fs = 16000,
-				stage = 'train',
-				# tasks = ['stat'],
-				# arrays = ['array1', 'array2'],
-				mic_dist_range = [0.05, 20],
-				dataset_sz = 10
-			)
-    _, total_duration = dataset.duration()
-    print('AMI: ', total_duration, 'h')
-    # for i in range(100):
-    #     sig = dataset[i]
-    #     print(sig.shape)
+    # sig_dir = dirs['AMI']
+    # dataset = AMIDataset(
+	# 			data_dir = sig_dir,
+	# 			T = 4.112,
+	# 			fs = 16000,
+	# 			stage = 'train',
+	# 			# tasks = ['stat'],
+	# 			# arrays = ['array1', 'array2'],
+	# 			mic_dist_range = [0.05, 20],
+	# 			dataset_sz = 10
+	# 		)
+    # _, total_duration = dataset.duration()
+    # print('AMI: ', total_duration, 'h')
+    # # for i in range(100):
+    # #     sig = dataset[i]
+    # #     print(sig.shape)
     
     sig_dir = dirs['AISHELL4']
     dataset = AISHELL4Dataset(
@@ -1786,24 +1788,24 @@ if __name__ == '__main__':
 			)
     _, total_duration = dataset.duration()
     print('AISHELL4: ', total_duration, 'h')
-    # for i in range(10):
-    #     sig = dataset[i]
-    #     print(sig.shape)
+    for i in range(10):
+        sig = dataset[i]
+        print(sig.shape)
 
-    sig_dir = dirs['M2MeT']
-    dataset = M2MeTDataset(
-				data_dir = sig_dir,
-				T = 4.112,
-				fs = 16000,
-				stage = 'train',
-				# tasks = ['stat'],
-				# arrays = ['array1', 'array2'],
-				mic_dist_range = [0.05, 20],
-				dataset_sz = 100,
-                remove_spkoverlap = False,
-			)
-    _, total_duration = dataset.duration()
-    print('M2Met: ', total_duration, 'h')
+    # sig_dir = dirs['M2MeT']
+    # dataset = M2MeTDataset(
+	# 			data_dir = sig_dir,
+	# 			T = 4.112,
+	# 			fs = 16000,
+	# 			stage = 'train',
+	# 			# tasks = ['stat'],
+	# 			# arrays = ['array1', 'array2'],
+	# 			mic_dist_range = [0.05, 20],
+	# 			dataset_sz = 100,
+    #             remove_spkoverlap = False,
+	# 		)
+    # _, total_duration = dataset.duration()
+    # print('M2Met: ', total_duration, 'h')
     # for i in range(100000):
     #     sig = dataset[i]
     #     print(sig.shape)
