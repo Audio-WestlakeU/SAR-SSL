@@ -218,7 +218,7 @@ A python implementation of “**<a href="https://ieeexplore.ieee.org/document/10
 ## Citation
 If you find our work useful in your research, please consider citing:
 ```
-@InProceedings{yang2024sarssl,
+@article{yang2024sarssl,
     Author = "Bing Yang and Xiaofei Li",
     Title = "Self-Supervised Learning of Spatial Acoustic Representation with Cross-Channel Signal Reconstruction and Multi-Channel Conformer",
     Journal = "IEEE/ACM Transactions on Audio, Speech, and Language Processing (TASLP)",
